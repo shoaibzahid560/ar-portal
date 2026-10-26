@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Web: next dev",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}/apps/web"
+    },
+    {
+      "name": "API: uvicorn",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--reload", "--port", "8000"],
+      "cwd": "${workspaceFolder}/apps/api",
+      "envFile": "${workspaceFolder}/apps/api/.env",
+      "justMyCode": true
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Web + API",
+      "configurations": ["API: uvicorn", "Web: next dev"],
+      "stopAll": true
+    }
+  ]
+}

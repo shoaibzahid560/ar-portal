@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+/*
+  Design tokens carried over from the current portal (Appendix A of the build guideline).
+  Use them as Tailwind classes: bg-navy, text-muted, border-line, bg-brand-soft, ...
+*/
+@theme {
+  --color-navy: #0b1d33;
+  --color-navy-2: #102b49;
+  --color-brand: #2f80c9;
+  --color-brand-soft: #dcecf8;
+
+  --color-canvas: #f4f5f8; /* page background behind cards */
+  --color-rail: #f6f7fb; /* icon rail background */
+  --color-hover: #f0f1f6; /* hovered / selected list rows */
+  --color-ink: #1e2430; /* body text */
+  --color-muted: #727988; /* secondary text */
+  --color-line: #e5e7ed; /* borders and dividers */
+  --color-selected: #3e2a78; /* selected view in the secondary panel */
+
+  /* Status colors: base, soft background, readable text on the soft background */
+  --color-ok: #249b62;
+  --color-ok-soft: #e6f6ed;
+  --color-ok-ink: #18734a;
+  --color-warn: #c68a22;
+  --color-warn-soft: #fff3db;
+  --color-warn-ink: #9a6818;
+  --color-danger: #d24d57;
+  --color-danger-soft: #fde8ea;
+  --color-danger-ink: #a33a43;
+  --color-info-soft: #e7eef5;
+  --color-neutral-soft: #eef0f4;
+  --color-accent: #6b43b7;
+}
+
+@theme {
+  --font-sans: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-[13px] text-ink antialiased;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}
