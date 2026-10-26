@@ -7,6 +7,7 @@ import { MetricCard } from "@/components/data/metric-card";
 import { Panel } from "@/components/data/panel";
 import { StatusPill } from "@/components/data/status-pill";
 import { Table, Td, Th } from "@/components/data/table";
+import { ApiStatus } from "@/components/shell/api-status";
 import { PageBody, PageHeader } from "@/components/shell/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { formatCount, formatDate, formatMoney } from "@/lib/format";
@@ -30,9 +31,12 @@ export default function DashboardPage({ searchParams }: PageProps<"/dashboard">)
         title="Dashboard"
         subtitle="AR operations at a glance"
         actions={
-          <LinkButton href="/uploads" variant="primary">
-            New upload
-          </LinkButton>
+          <>
+            <ApiStatus />
+            <LinkButton href="/uploads" variant="primary">
+              New upload
+            </LinkButton>
+          </>
         }
       />
       <PageBody>

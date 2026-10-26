@@ -10,7 +10,7 @@ ar-portal/            Project root: open this folder in VS Code; Git lives here
 ├── .vscode/          Shared settings, debug configurations, recommended extensions
 ├── apps/
 │   ├── web/          Next.js app (run npm commands inside this folder)
-│   └── api/          FastAPI app (added in M0 step 1)
+│   └── api/          FastAPI app (Python; run commands inside this folder)
 └── supabase/         Local database config (added with the API)
 ```
 
@@ -18,18 +18,26 @@ ar-portal/            Project root: open this folder in VS Code; Git lives here
 
 Git, Node.js 20.9 or newer, Python 3.12+, Docker Desktop, Supabase CLI, Vercel CLI.
 
-## Run the web app
+## First-time setup
 
-From VS Code: open **Run and Debug**, choose **Web: next dev**, press F5.
-
-From a terminal:
+Web app, from `apps\web`:
 
 ```powershell
-cd apps\web
 npm install
-npm run dev
+copy .env.example .env.local
 ```
 
-Then open http://localhost:3000.
+API, from `apps\api`:
 
-Once the API exists, choose **Web + API** in Run and Debug to start both with one key.
+```powershell
+py -m venv .venv
+.venv\Scripts\python -m pip install -e ".[dev]"
+copy .env.example .env
+```
+
+## Run
+
+In VS Code, open **Run and Debug**, choose **Web + API**, and press F5.
+Then open http://localhost:3000. The dashboard header shows whether the web app can reach the API.
+
+Each app's own README covers running it from a terminal, tests and lint.
