@@ -12,6 +12,11 @@ const nextConfig: NextConfig = {
     },
   },
 
+  /** The home page opens the dashboard. */
+  async redirects() {
+    return [{ source: "/", destination: "/dashboard", permanent: false }];
+  },
+
   /**
    * The browser only talks to this domain. Requests to /api/* are forwarded to the
    * FastAPI project, so the session cookie stays first-party.

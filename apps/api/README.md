@@ -32,17 +32,25 @@ Check http://localhost:8000/api/health, and the interactive docs at http://local
 .venv\Scripts\ruff format .
 ```
 
-## Local database (optional until M0 step 2)
+## Database
 
-Needs Docker Desktop running. From the project root (`ar-portal`):
+`DATABASE_URL` in `.env` points at the Supabase dev project (see `.env.example`).
+
+Create or update the tables (run after pulling new code that adds a migration):
 
 ```powershell
-npx supabase init     # once; answer N to the Deno/VS Code questions
-npx supabase start    # first run downloads the containers and takes a few minutes
+.venv\Scripts\alembic upgrade head
+.venv\Scripts\alembic current        # shows the version the database is at
 ```
 
-Then uncomment `DATABASE_URL` in `apps\api\.env` and restart the API.
-`/api/health` reports `"database": "ok"` once it can connect.
+Every table lives in the `ar` schema. In the Supabase dashboard, open **Table Editor** and pick
+`ar` from the schema list to see them.
+
+### Database tests
+
+`tests/test_migrations.py` drops and recreates every table, so it runs only when
+`TEST_DATABASE_URL` is set, and must never point at a database with real data.
+Without it those tests are skipped. GitHub Actions runs them against a temporary database.
 
 ## Layout
 
@@ -50,6 +58,9 @@ Then uncomment `DATABASE_URL` in `apps\api\.env` and restart the API.
 |---|---|
 | `app/main.py` | Creates the FastAPI app and registers each module's router. |
 | `app/core/config.py` | Settings from environment variables or `.env`. |
-| `app/core/db.py` | Database engine, set up for Vercel and Supabase's pooler. |
-| `app/modules/<name>/` | One folder per feature: `router.py`, `schemas.py`, `service.py`, and from M0 step 2 `models.py` and `repository.py`. |
+| `app/core/db.py` | Database engine and per-request session, set up for Vercel and Supabase's pooler. |
+| `app/core/orm.py` | Base class for tables; everything lives in the `ar` schema. |
+| `app/models.py` | Imports every table so Alembic sees the whole schema. |
+| `migrations/` | Alembic migrations. `0001_foundation.py` creates the M0 tables, roles and permissions. |
+| `app/modules/<name>/` | One folder per feature: `router.py`, `schemas.py`, `service.py`, `models.py` and `repository.py`. |
 | `tests/` | pytest tests, run in CI on every pull request. |
