@@ -1,15 +1,23 @@
 import type { Metadata } from "next";
-import { ModulePlaceholder } from "@/components/shell/module-placeholder";
+import { Suspense } from "react";
+import { SettingsAdmin } from "@/components/admin/settings-admin";
+import { Panel } from "@/components/data/panel";
+import { PageBody, PageHeader } from "@/components/shell/page-header";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default function SettingsPage() {
   return (
-    <ModulePlaceholder
-      moduleKey="settings"
-      subtitle="System configuration"
-      milestone="M0"
-      description="Session limits, retention rules and other settings that apply to everyone."
-    />
+    <>
+      <PageHeader
+        title="Settings"
+        subtitle="Roles, permissions and system configuration"
+      />
+      <PageBody>
+        <Suspense fallback={<Panel>Loading…</Panel>}>
+          <SettingsAdmin />
+        </Suspense>
+      </PageBody>
+    </>
   );
 }

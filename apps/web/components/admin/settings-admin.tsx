@@ -1,0 +1,23 @@
+"use client";
+
+import { useSearchParams } from "next/navigation";
+import { EmptyState } from "@/components/data/empty-state";
+import { Panel } from "@/components/data/panel";
+import { getModule, resolveView } from "@/lib/navigation";
+import { RolesMatrix } from "./roles-matrix";
+
+export function SettingsAdmin() {
+  const view = resolveView(
+    getModule("settings"),
+    useSearchParams().get("view"),
+  ).slug;
+  if (view === "roles") return <RolesMatrix />;
+  return (
+    <Panel>
+      <EmptyState
+        title="General settings arrive with later modules"
+        description="Retention periods (management decision #4) and notification options are added in M1 and M5."
+      />
+    </Panel>
+  );
+}

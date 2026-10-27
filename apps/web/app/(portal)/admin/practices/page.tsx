@@ -1,15 +1,23 @@
 import type { Metadata } from "next";
-import { ModulePlaceholder } from "@/components/shell/module-placeholder";
+import { Suspense } from "react";
+import { PracticesAdmin } from "@/components/admin/practices-admin";
+import { Panel } from "@/components/data/panel";
+import { PageBody, PageHeader } from "@/components/shell/page-header";
 
 export const metadata: Metadata = { title: "Practices" };
 
 export default function PracticesPage() {
   return (
-    <ModulePlaceholder
-      moduleKey="practices"
-      subtitle="Practices and teams"
-      milestone="M0"
-      description="Create practices and teams and choose which employees can see each one."
-    />
+    <>
+      <PageHeader
+        title="Practices"
+        subtitle="Practices and teams decide what each person can see"
+      />
+      <PageBody>
+        <Suspense fallback={<Panel>Loading…</Panel>}>
+          <PracticesAdmin />
+        </Suspense>
+      </PageBody>
+    </>
   );
 }

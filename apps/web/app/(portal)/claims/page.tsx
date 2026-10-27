@@ -10,19 +10,28 @@ import { inputClass, selectClass } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
 import { formatDate, formatMoney } from "@/lib/format";
 import { getModule, resolveView, viewHref } from "@/lib/navigation";
-import { SAMPLE_CLAIMS, SAMPLE_PRACTICES, claimMatchesView, isOverdue } from "@/lib/sample-data";
+import {
+  SAMPLE_CLAIMS,
+  SAMPLE_PRACTICES,
+  claimMatchesView,
+  isOverdue,
+} from "@/lib/sample-data";
 import { CLAIM_STATUSES, type ClaimStatus } from "@/lib/status";
 
 export const metadata: Metadata = { title: "Claims" };
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-const text = (value: string | string[] | undefined) => (typeof value === "string" ? value : "");
+const text = (value: string | string[] | undefined) =>
+  typeof value === "string" ? value : "";
 
 export default function ClaimsPage({ searchParams }: PageProps<"/claims">) {
   return (
     <>
-      <PageHeader title="Claims" subtitle="Work queues for every claim in your scope" />
+      <PageHeader
+        title="Claims"
+        subtitle="Work queues for every claim in your scope"
+      />
       <PageBody>
         <Suspense fallback={<Panel>Loading claims…</Panel>}>
           {searchParams.then((params) => (
@@ -47,7 +56,10 @@ function ClaimsView({ params }: { params: SearchParams }) {
       claimMatchesView(c, view.slug) &&
       (!status || c.status === status) &&
       (!practice || c.practice === practice) &&
-      (!query || [c.id, c.patient, c.practice, c.payer].some((field) => field.toLowerCase().includes(query))),
+      (!query ||
+        [c.id, c.patient, c.practice, c.payer].some((field) =>
+          field.toLowerCase().includes(query),
+        )),
   );
 
   return (
@@ -61,7 +73,12 @@ function ClaimsView({ params }: { params: SearchParams }) {
           aria-label="Search claims"
           className={cn(inputClass, "min-w-[270px]")}
         />
-        <select name="status" defaultValue={status} aria-label="Status" className={selectClass}>
+        <select
+          name="status"
+          defaultValue={status}
+          aria-label="Status"
+          className={selectClass}
+        >
           <option value="">All statuses</option>
           {(Object.keys(CLAIM_STATUSES) as ClaimStatus[]).map((s) => (
             <option key={s} value={s}>
@@ -69,7 +86,12 @@ function ClaimsView({ params }: { params: SearchParams }) {
             </option>
           ))}
         </select>
-        <select name="practice" defaultValue={practice} aria-label="Practice" className={selectClass}>
+        <select
+          name="practice"
+          defaultValue={practice}
+          aria-label="Practice"
+          className={selectClass}
+        >
           <option value="">All practices</option>
           {SAMPLE_PRACTICES.map((p) => (
             <option key={p} value={p}>
@@ -85,7 +107,11 @@ function ClaimsView({ params }: { params: SearchParams }) {
           <EmptyState
             title="No claims match these filters"
             description="Try a different search, or clear the filters to see every claim in this view."
-            action={<LinkButton href={viewHref(claimsModule, view)}>Clear filters</LinkButton>}
+            action={
+              <LinkButton href={viewHref(claimsModule, view)}>
+                Clear filters
+              </LinkButton>
+            }
           />
         ) : (
           <Table>
@@ -105,18 +131,32 @@ function ClaimsView({ params }: { params: SearchParams }) {
             <tbody>
               {rows.map((c) => (
                 <tr key={c.id} className="hover:bg-[#fafbfc]">
-                  <Td className="pl-[15px] font-bold whitespace-nowrap">{c.id}</Td>
+                  <Td className="pl-[15px] font-bold whitespace-nowrap">
+                    {c.id}
+                  </Td>
                   <Td>{c.patient}</Td>
                   <Td>{c.practice}</Td>
                   <Td>{c.payer}</Td>
-                  <Td className="whitespace-nowrap">{formatDate(c.dateOfService)}</Td>
+                  <Td className="whitespace-nowrap">
+                    {formatDate(c.dateOfService)}
+                  </Td>
                   <Td className="text-right">{formatMoney(c.balance)}</Td>
-                  <Td className={cn(!c.assignedTo && "text-muted")}>{c.assignedTo ?? "Unassigned"}</Td>
-                  <Td className={cn("whitespace-nowrap", isOverdue(c) && "font-bold text-danger-ink")}>
+                  <Td className={cn(!c.assignedTo && "text-muted")}>
+                    {c.assignedTo ?? "Unassigned"}
+                  </Td>
+                  <Td
+                    className={cn(
+                      "whitespace-nowrap",
+                      isOverdue(c) && "font-bold text-danger-ink",
+                    )}
+                  >
                     {formatDate(c.followUp)}
                   </Td>
                   <Td>
-                    <StatusPill label={CLAIM_STATUSES[c.status].label} tone={CLAIM_STATUSES[c.status].tone} />
+                    <StatusPill
+                      label={CLAIM_STATUSES[c.status].label}
+                      tone={CLAIM_STATUSES[c.status].tone}
+                    />
                   </Td>
                 </tr>
               ))}

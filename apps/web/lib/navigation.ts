@@ -134,11 +134,11 @@ export const NAV_MODULES: NavModule[] = [
     icon: ShieldCheck,
     permission: "audit.view",
     placement: "main",
+    // Claim timelines, field changes and exports are added with claims (M4) and reports (M6).
     views: [
-      { slug: "claim-timelines", label: "Claim Timelines" },
-      { slug: "field-changes", label: "Field Changes" },
-      { slug: "access", label: "Access" },
-      { slug: "exports", label: "Exports" },
+      { slug: "all", label: "All Events" },
+      { slug: "access", label: "Sign-ins" },
+      { slug: "admin", label: "Admin Changes" },
     ],
   },
   {
@@ -168,6 +168,7 @@ export const NAV_MODULES: NavModule[] = [
       { slug: "all", label: "All Practices" },
       { slug: "active", label: "Active" },
       { slug: "paused", label: "Paused" },
+      { slug: "teams", label: "Teams" },
     ],
   },
   {
@@ -179,15 +180,16 @@ export const NAV_MODULES: NavModule[] = [
     permission: "settings.manage",
     placement: "admin",
     views: [
+      { slug: "roles", label: "Roles & Permissions" },
       { slug: "general", label: "General" },
-      { slug: "security", label: "Security" },
-      { slug: "retention", label: "Retention" },
     ],
   },
 ];
 
 export function findModule(pathname: string): NavModule | undefined {
-  return NAV_MODULES.find((m) => pathname === m.href || pathname.startsWith(`${m.href}/`));
+  return NAV_MODULES.find(
+    (m) => pathname === m.href || pathname.startsWith(`${m.href}/`),
+  );
 }
 
 export function getModule(key: string): NavModule {
@@ -197,10 +199,15 @@ export function getModule(key: string): NavModule {
 }
 
 /** Resolves ?view= to a known view, falling back to the module's default view. */
-export function resolveView(module: NavModule, slug: string | null | undefined): NavView {
+export function resolveView(
+  module: NavModule,
+  slug: string | null | undefined,
+): NavView {
   return module.views.find((v) => v.slug === slug) ?? module.views[0];
 }
 
 export function viewHref(module: NavModule, view: NavView): string {
-  return view.slug === module.views[0].slug ? module.href : `${module.href}?view=${view.slug}`;
+  return view.slug === module.views[0].slug
+    ? module.href
+    : `${module.href}?view=${view.slug}`;
 }

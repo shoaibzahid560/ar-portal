@@ -24,3 +24,17 @@ export function formatMoney(amount: number): string {
 export function formatCount(value: number): string {
   return value.toLocaleString("en-US");
 }
+
+const dateTimeFormatter = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+/** A moment in the viewer's own time zone: "27 Oct 2026, 3:41 pm". */
+export function formatDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  return dateTimeFormatter.format(new Date(iso));
+}

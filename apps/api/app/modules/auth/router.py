@@ -4,9 +4,10 @@ from fastapi.responses import RedirectResponse
 from app.core.config import get_settings
 from app.core.context import SESSION_COOKIE, CurrentCtx
 from app.core.db import DbSession
+from app.core.schemas import NamedRef, RoleRef
 from app.core.security import new_token
 from app.modules.auth import google, repository, service
-from app.modules.auth.schemas import MeResponse, MeRole, MeUser, NamedRef
+from app.modules.auth.schemas import MeResponse, MeUser
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -96,7 +97,7 @@ async def me(ctx: CurrentCtx) -> MeResponse:
     teams = await repository.get_user_teams(ctx.db, ctx.user.id)
     return MeResponse(
         user=MeUser.model_validate(ctx.user, from_attributes=True),
-        role=MeRole(key=ctx.role.key, name=ctx.role.name),
+        role=RoleRef(key=ctx.role.key, name=ctx.role.name),
         permissions=sorted(ctx.permissions),
         practices=[NamedRef(id=p.id, name=p.name) for p in practices],
         teams=[NamedRef(id=t.id, name=t.name) for t in teams],

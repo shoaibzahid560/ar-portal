@@ -1,16 +1,30 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type Me = {
-  user: { id: string; email: string; full_name: string; employee_code: string | null; phone: string | null };
+  user: {
+    id: string;
+    email: string;
+    full_name: string;
+    employee_code: string | null;
+    phone: string | null;
+  };
   role: { key: string; name: string };
   permissions: string[];
   practices: { id: string; name: string }[];
   teams: { id: string; name: string }[];
 };
 
-type State = { kind: "loading" } | { kind: "ready"; me: Me } | { kind: "unreachable" };
+type State =
+  { kind: "loading" } | { kind: "ready"; me: Me } | { kind: "unreachable" };
 
 const AuthContext = createContext<Me | null>(null);
 
@@ -39,7 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     load();
   }, [load]);
 
-  if (state.kind === "ready") return <AuthContext value={state.me}>{children}</AuthContext>;
+  if (state.kind === "ready")
+    return <AuthContext value={state.me}>{children}</AuthContext>;
 
   return (
     <div className="flex h-screen items-center justify-center bg-canvas p-6">
@@ -48,9 +63,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           Loading the portal…
         </p>
       ) : (
-        <div role="alert" className="max-w-sm rounded-[9px] border border-line bg-white p-6 text-center">
-          <p className="mb-1 font-semibold">The portal can’t reach its server</p>
-          <p className="mb-4 text-muted">Check that the API is running, then try again.</p>
+        <div
+          role="alert"
+          className="max-w-sm rounded-[9px] border border-line bg-white p-6 text-center"
+        >
+          <p className="mb-1 font-semibold">
+            The portal can’t reach its server
+          </p>
+          <p className="mb-4 text-muted">
+            Check that the API is running, then try again.
+          </p>
           <button
             type="button"
             onClick={() => {

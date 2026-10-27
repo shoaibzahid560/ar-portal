@@ -20,11 +20,17 @@ import {
   isOpen,
   isOverdue,
 } from "@/lib/sample-data";
-import { CLAIM_STATUSES, UPLOAD_STATUSES, type ClaimStatus } from "@/lib/status";
+import {
+  CLAIM_STATUSES,
+  UPLOAD_STATUSES,
+  type ClaimStatus,
+} from "@/lib/status";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
-export default function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
+export default function DashboardPage({
+  searchParams,
+}: PageProps<"/dashboard">) {
   return (
     <>
       <PageHeader
@@ -42,7 +48,10 @@ export default function DashboardPage({ searchParams }: PageProps<"/dashboard">)
       <PageBody>
         <Suspense>
           {searchParams.then((params) => {
-            const view = resolveView(getModule("dashboard"), typeof params.view === "string" ? params.view : null);
+            const view = resolveView(
+              getModule("dashboard"),
+              typeof params.view === "string" ? params.view : null,
+            );
             return view.slug === "overview" ? (
               <Overview />
             ) : (
@@ -66,18 +75,40 @@ function Overview() {
   const dueToday = open.filter((c) => c.followUp === SAMPLE_TODAY);
   const overdue = SAMPLE_CLAIMS.filter((c) => isOverdue(c));
 
-  const byStatus = (Object.keys(CLAIM_STATUSES) as ClaimStatus[]).map((status) => {
-    const claims = SAMPLE_CLAIMS.filter((c) => c.status === status);
-    return { status, count: claims.length, balance: claims.reduce((sum, c) => sum + c.balance, 0) };
-  });
+  const byStatus = (Object.keys(CLAIM_STATUSES) as ClaimStatus[]).map(
+    (status) => {
+      const claims = SAMPLE_CLAIMS.filter((c) => c.status === status);
+      return {
+        status,
+        count: claims.length,
+        balance: claims.reduce((sum, c) => sum + c.balance, 0),
+      };
+    },
+  );
 
   return (
     <>
       <div className="mb-3 grid grid-cols-4 gap-2.5 max-[1100px]:grid-cols-2 max-[560px]:grid-cols-1">
-        <MetricCard label="Open claims" value={formatCount(open.length)} meta={`${formatMoney(open.reduce((s, c) => s + c.balance, 0))} outstanding`} />
-        <MetricCard label="Unassigned claims" value={formatCount(unassigned.length)} meta="Waiting for a manager to assign" />
-        <MetricCard label="Follow-ups due today" value={formatCount(dueToday.length)} meta="Across all associates" />
-        <MetricCard label="Overdue follow-ups" value={formatCount(overdue.length)} meta="Requires management attention" />
+        <MetricCard
+          label="Open claims"
+          value={formatCount(open.length)}
+          meta={`${formatMoney(open.reduce((s, c) => s + c.balance, 0))} outstanding`}
+        />
+        <MetricCard
+          label="Unassigned claims"
+          value={formatCount(unassigned.length)}
+          meta="Waiting for a manager to assign"
+        />
+        <MetricCard
+          label="Follow-ups due today"
+          value={formatCount(dueToday.length)}
+          meta="Across all associates"
+        />
+        <MetricCard
+          label="Overdue follow-ups"
+          value={formatCount(overdue.length)}
+          meta="Requires management attention"
+        />
       </div>
 
       <div className="grid grid-cols-[1.5fr_1fr] gap-3 max-[1100px]:grid-cols-1">
@@ -94,7 +125,10 @@ function Overview() {
               {byStatus.map((row) => (
                 <tr key={row.status}>
                   <Td>
-                    <StatusPill label={CLAIM_STATUSES[row.status].label} tone={CLAIM_STATUSES[row.status].tone} />
+                    <StatusPill
+                      label={CLAIM_STATUSES[row.status].label}
+                      tone={CLAIM_STATUSES[row.status].tone}
+                    />
                   </Td>
                   <Td className="text-right font-bold">{row.count}</Td>
                   <Td className="text-right">{formatMoney(row.balance)}</Td>
@@ -114,7 +148,10 @@ function Overview() {
         flush
         className="mt-3"
         action={
-          <Link href="/uploads" className="font-semibold text-brand hover:underline">
+          <Link
+            href="/uploads"
+            className="font-semibold text-brand hover:underline"
+          >
             View all uploads
           </Link>
         }
@@ -141,7 +178,10 @@ function Overview() {
                 <Td>{u.uploadedBy}</Td>
                 <Td>{formatDate(u.uploadedOn)}</Td>
                 <Td>
-                  <StatusPill label={UPLOAD_STATUSES[u.status].label} tone={UPLOAD_STATUSES[u.status].tone} />
+                  <StatusPill
+                    label={UPLOAD_STATUSES[u.status].label}
+                    tone={UPLOAD_STATUSES[u.status].tone}
+                  />
                 </Td>
               </tr>
             ))}
