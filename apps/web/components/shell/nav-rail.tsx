@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { NAV_MODULES, type NavModule } from "@/lib/navigation";
 
@@ -24,11 +25,13 @@ function RailLink({ navModule, active }: { navModule: NavModule; active: boolean
 
 export function NavRail() {
   const pathname = usePathname();
+  const { permissions } = useAuth();
   const isActive = (m: NavModule) => pathname === m.href || pathname.startsWith(`${m.href}/`);
 
-  // From M0 step 6 this list is filtered by the permissions returned from /api/auth/me.
-  const main = NAV_MODULES.filter((m) => m.placement === "main");
-  const admin = NAV_MODULES.filter((m) => m.placement === "admin");
+  // Only what the signed-in person's role allows. The API enforces the same rules on every request.
+  const visible = NAV_MODULES.filter((m) => m.permission === null || permissions.includes(m.permission));
+  const main = visible.filter((m) => m.placement === "main");
+  const admin = visible.filter((m) => m.placement === "admin");
 
   return (
     <nav

@@ -22,8 +22,11 @@ export type NavModule = {
   title: string;
   href: string;
   icon: LucideIcon;
-  /** Permission needed to see this module. The rail is filtered by /api/auth/me in M0. */
-  permission: string;
+  /**
+   * Permission needed to see this module. null means visible to everyone until the module that
+   * builds it adds its permission (uploads in M1, review in M2, claims and follow-ups in M3, reports in M6).
+   */
+  permission: string | null;
   placement: "main" | "admin";
   views: NavView[];
 };
@@ -54,7 +57,7 @@ export const NAV_MODULES: NavModule[] = [
     title: "Uploads",
     href: "/uploads",
     icon: Upload,
-    permission: "uploads.view",
+    permission: null,
     placement: "main",
     views: [
       { slug: "all", label: "All Uploads" },
@@ -69,7 +72,7 @@ export const NAV_MODULES: NavModule[] = [
     title: "Review Queue",
     href: "/review",
     icon: GitCompareArrows,
-    permission: "reconciliation.review",
+    permission: null,
     placement: "main",
     views: [
       { slug: "ambiguous", label: "Ambiguous Matches" },
@@ -82,7 +85,7 @@ export const NAV_MODULES: NavModule[] = [
     title: "Claims",
     href: "/claims",
     icon: FileText,
-    permission: "claims.view",
+    permission: null,
     placement: "main",
     views: [
       { slug: "all", label: "All Claims" },
@@ -101,7 +104,7 @@ export const NAV_MODULES: NavModule[] = [
     title: "Follow-ups",
     href: "/followups",
     icon: CalendarClock,
-    permission: "claims.view",
+    permission: null,
     placement: "main",
     views: [
       { slug: "due-today", label: "Due Today" },
@@ -115,7 +118,7 @@ export const NAV_MODULES: NavModule[] = [
     title: "Reports",
     href: "/reports",
     icon: BarChart3,
-    permission: "reports.view",
+    permission: null,
     placement: "main",
     views: [
       { slug: "performance", label: "Performance" },

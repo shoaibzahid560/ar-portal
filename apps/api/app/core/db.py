@@ -1,7 +1,8 @@
 from collections.abc import AsyncIterator
 from functools import lru_cache
+from typing import Annotated
 
-from fastapi import HTTPException, status
+from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -41,3 +42,6 @@ async def get_db() -> AsyncIterator[AsyncSession]:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Database is not configured.")
     async with sessionmaker() as session:
         yield session
+
+
+DbSession = Annotated[AsyncSession, Depends(get_db)]

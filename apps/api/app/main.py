@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.core.config import get_settings
+from app.modules.auth.router import router as auth_router
 from app.modules.health.router import router as health_router
 
 settings = get_settings()
@@ -16,3 +17,4 @@ app = FastAPI(
 
 # Every route lives under /api, matching the Next.js rewrite of /api/* to this app.
 app.include_router(health_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")

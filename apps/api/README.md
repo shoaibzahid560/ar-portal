@@ -52,6 +52,21 @@ Every table lives in the `ar` schema. In the Supabase dashboard, open **Table Ed
 `TEST_DATABASE_URL` is set, and must never point at a database with real data.
 Without it those tests are skipped. GitHub Actions runs them against a temporary database.
 
+## Sign-in
+
+People sign in with Google, and the API lets them in only if their email is in `ar.users` and
+active. Sessions end after 30 minutes idle or 12 hours, or at sign-out.
+
+Create the first System Administrator once per database (there is no web page for this):
+
+```powershell
+.venv\Scripts\python -m app.cli create-admin you@yourcompany.com "Your Name"
+```
+
+Google settings go in `.env` (see `.env.example`): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+`ALLOWED_GOOGLE_DOMAIN`. The OAuth client's authorized redirect URI must be
+`http://localhost:3000/api/auth/google/callback` for local development.
+
 ## Layout
 
 | Path | What it holds |
@@ -60,6 +75,9 @@ Without it those tests are skipped. GitHub Actions runs them against a temporary
 | `app/core/config.py` | Settings from environment variables or `.env`. |
 | `app/core/db.py` | Database engine and per-request session, set up for Vercel and Supabase's pooler. |
 | `app/core/orm.py` | Base class for tables; everything lives in the `ar` schema. |
+| `app/core/context.py` | Who is calling: `CurrentCtx` for signed-in routes, `require("permission")` for protected ones. |
+| `app/core/audit.py` | `audit.record(...)`, written in the same transaction as the change. |
+| `app/cli.py` | Command-line maintenance, such as `create-admin`. |
 | `app/models.py` | Imports every table so Alembic sees the whole schema. |
 | `migrations/` | Alembic migrations. `0001_foundation.py` creates the M0 tables, roles and permissions. |
 | `app/modules/<name>/` | One folder per feature: `router.py`, `schemas.py`, `service.py`, `models.py` and `repository.py`. |

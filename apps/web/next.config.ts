@@ -3,6 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    // The portal waits in the browser for the signed-in person (AuthProvider) before drawing a page,
+    // so Next.js's automatic instant-navigation check would warn about every page in development.
+    // Only pages that opt in with `export const instant = true` are checked.
+    instantInsights: { validationLevel: "manual-warning" },
+  },
   turbopack: {
     rules: {
       "*.css": {

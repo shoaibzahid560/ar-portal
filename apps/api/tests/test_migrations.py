@@ -1,23 +1,13 @@
-"""
-Database tests. They run only when TEST_DATABASE_URL points at a throwaway database,
-because they drop and recreate every table. Never point it at a database with real data.
-"""
-
-import asyncio
-import os
+"""Checks that migration 0001 builds the schema, seed data and protections correctly."""
 
 import pytest
 from alembic import command
-from alembic.config import Config
-from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy.pool import NullPool
 
-from app.core.config import Settings
+from tests.db import alembic_config, migrate_fresh, requires_database
+from tests.db import run_sql as _run
 
-RAW_URL = os.environ.get("TEST_DATABASE_URL", "")
-pytestmark = pytest.mark.skipif(not RAW_URL, reason="Set TEST_DATABASE_URL to run database tests")
+pytestmark = requires_database
 
 EXPECTED_TABLES = {
     "alembic_version",
@@ -34,39 +24,9 @@ EXPECTED_TABLES = {
 }
 
 
-def _url() -> str:
-    url = Settings(database_url=RAW_URL).database_url
-    assert url
-    return url
-
-
-def _alembic() -> Config:
-    config = Config("alembic.ini")
-    config.attributes["database_url"] = _url()
-    return config
-
-
-def _run(sql: str, *, commit: bool = False) -> list[tuple]:
-    async def go() -> list[tuple]:
-        engine = create_async_engine(_url(), poolclass=NullPool, connect_args={"statement_cache_size": 0})
-        try:
-            async with engine.connect() as connection:
-                result = await connection.execute(text(sql))
-                rows = [tuple(row) for row in result] if result.returns_rows else []
-                if commit:
-                    await connection.commit()
-                return rows
-        finally:
-            await engine.dispose()
-
-    return asyncio.run(go())
-
-
 @pytest.fixture(scope="module", autouse=True)
 def fresh_schema() -> None:
-    config = _alembic()
-    command.downgrade(config, "base")
-    command.upgrade(config, "head")
+    migrate_fresh()
 
 
 def test_all_tables_live_in_the_ar_schema() -> None:
@@ -133,4 +93,4 @@ def test_emails_must_be_lowercase() -> None:
 
 
 def test_models_match_the_migrations() -> None:
-    command.check(_alembic())
+    command.check(alembic_config())
