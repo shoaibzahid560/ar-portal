@@ -67,6 +67,16 @@ Google settings go in `.env` (see `.env.example`): `GOOGLE_CLIENT_ID`, `GOOGLE_C
 `ALLOWED_GOOGLE_DOMAIN`. The OAuth client's authorized redirect URI must be
 `http://localhost:3000/api/auth/google/callback` for local development.
 
+## Uploads and claims (M1)
+
+An AR Lead uploads a practice's AR sheet (.xlsx or .csv, the layout used for every practice). Each
+valid line becomes a claim; lines already in the system are skipped; problems are listed by row
+without repeating cell values. The work columns from the sheet (Claim Status, Pay Status, Check
+Status, Action Taken, amounts, dates, notes, EOB, Assigned To) are filled in on each claim.
+
+During local development, uploaded files are stored in `apps/api/.storage/` (ignored by Git).
+Deployed environments will use a private Supabase Storage bucket (M0 step 7).
+
 ## Layout
 
 | Path | What it holds |

@@ -4,8 +4,13 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { findModule, resolveView, viewHref, type NavModule } from "@/lib/navigation";
-import { sampleViewCount } from "@/lib/sample-data";
+import {
+  findModule,
+  resolveView,
+  viewHref,
+  type NavModule,
+} from "@/lib/navigation";
+import { useViewCounts } from "@/lib/use-view-counts";
 
 const panelClass =
   "flex w-[280px] shrink-0 flex-col border-r border-line bg-white max-[1100px]:w-[230px] max-[760px]:hidden";
@@ -19,10 +24,18 @@ export function SecondaryPanel() {
 }
 
 function PanelContent({ navModule }: { navModule: NavModule }) {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const active = resolveView(navModule, searchParams.get("view"));
+  // Refreshed on every navigation, so counts follow uploads and claim changes.
+  const counts = useViewCounts(
+    navModule.key,
+    `${pathname}?${searchParams.toString()}`,
+  );
   const [filter, setFilter] = useState("");
-  const views = navModule.views.filter((v) => v.label.toLowerCase().includes(filter.trim().toLowerCase()));
+  const views = navModule.views.filter((v) =>
+    v.label.toLowerCase().includes(filter.trim().toLowerCase()),
+  );
 
   return (
     <aside aria-label={`${navModule.title} views`} className={panelClass}>
@@ -38,11 +51,13 @@ function PanelContent({ navModule }: { navModule: NavModule }) {
           className="w-full rounded-lg border border-line bg-[#fafbfc] px-2.5 py-2 outline-none placeholder:text-muted focus:border-brand"
         />
       </div>
-      <p className="px-3.5 pt-3 pb-1.5 text-[10px] font-extrabold tracking-[0.08em] text-[#8a909b] uppercase">Views</p>
+      <p className="px-3.5 pt-3 pb-1.5 text-[10px] font-extrabold tracking-[0.08em] text-[#8a909b] uppercase">
+        Views
+      </p>
       <ul className="min-h-0 overflow-auto px-2 pb-3.5">
         {views.map((view) => {
           const isActive = view.slug === active.slug;
-          const count = sampleViewCount(navModule.key, view.slug);
+          const count = counts?.[view.slug] ?? null;
           return (
             <li key={view.slug}>
               <Link
@@ -53,7 +68,12 @@ function PanelContent({ navModule }: { navModule: NavModule }) {
                   isActive && "bg-hover font-bold text-selected",
                 )}
               >
-                <span className={cn("size-[9px] shrink-0 rounded-full", isActive ? "bg-ok" : "bg-[#a6abb5]")} />
+                <span
+                  className={cn(
+                    "size-[9px] shrink-0 rounded-full",
+                    isActive ? "bg-ok" : "bg-[#a6abb5]",
+                  )}
+                />
                 {view.label}
                 {count !== null && (
                   <span className="ml-auto min-w-5 rounded-[10px] bg-[#eceef3] px-1.5 py-0.5 text-center text-[10px] font-normal text-[#596170]">
@@ -64,7 +84,9 @@ function PanelContent({ navModule }: { navModule: NavModule }) {
             </li>
           );
         })}
-        {views.length === 0 && <li className="px-3 py-4 text-muted">No views match “{filter}”.</li>}
+        {views.length === 0 && (
+          <li className="px-3 py-4 text-muted">No views match “{filter}”.</li>
+        )}
       </ul>
     </aside>
   );

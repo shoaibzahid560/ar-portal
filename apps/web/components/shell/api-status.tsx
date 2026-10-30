@@ -4,13 +4,19 @@ import { useEffect, useState } from "react";
 import { StatusPill } from "@/components/data/status-pill";
 import type { Tone } from "@/lib/status";
 
-type Health = { status: "ok"; database: "ok" | "unavailable" | "not_configured" };
+type Health = {
+  status: "ok";
+  database: "ok" | "unavailable" | "not_configured";
+};
 
-type State = { kind: "checking" } | { kind: "down" } | { kind: "up"; health: Health };
+type State =
+  { kind: "checking" } | { kind: "down" } | { kind: "up"; health: Health };
 
 function describe(state: State): { label: string; tone: Tone } {
-  if (state.kind === "checking") return { label: "Checking API…", tone: "neutral" };
-  if (state.kind === "down") return { label: "API not reachable", tone: "danger" };
+  if (state.kind === "checking")
+    return { label: "Checking API…", tone: "neutral" };
+  if (state.kind === "down")
+    return { label: "API not reachable", tone: "danger" };
   switch (state.health.database) {
     case "ok":
       return { label: "API and database connected", tone: "ok" };
@@ -31,7 +37,11 @@ export function ApiStatus() {
   useEffect(() => {
     const controller = new AbortController();
     fetch("/api/health", { signal: controller.signal, cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
+      .then((response) =>
+        response.ok
+          ? response.json()
+          : Promise.reject(new Error(String(response.status))),
+      )
       .then((health: Health) => setState({ kind: "up", health }))
       .catch(() => {
         if (!controller.signal.aborted) setState({ kind: "down" });

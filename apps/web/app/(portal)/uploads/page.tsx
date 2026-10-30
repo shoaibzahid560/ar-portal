@@ -1,15 +1,23 @@
 import type { Metadata } from "next";
-import { ModulePlaceholder } from "@/components/shell/module-placeholder";
+import { Suspense } from "react";
+import { Panel } from "@/components/data/panel";
+import { PageBody, PageHeader } from "@/components/shell/page-header";
+import { UploadsView } from "@/components/uploads/uploads-view";
 
 export const metadata: Metadata = { title: "Uploads" };
 
 export default function UploadsPage() {
   return (
-    <ModulePlaceholder
-      moduleKey="uploads"
-      subtitle="Import Dentrix AR reports and check validation results"
-      milestone="M1"
-      description="Each upload will list its row counts, validation errors and reconciliation results."
-    />
+    <>
+      <PageHeader
+        title="Uploads"
+        subtitle="AR sheets uploaded per practice, and what came of each one"
+      />
+      <PageBody>
+        <Suspense fallback={<Panel>Loading uploads…</Panel>}>
+          <UploadsView />
+        </Suspense>
+      </PageBody>
+    </>
   );
 }

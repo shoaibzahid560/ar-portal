@@ -1,15 +1,23 @@
 import type { Metadata } from "next";
-import { ModulePlaceholder } from "@/components/shell/module-placeholder";
+import { Suspense } from "react";
+import { ClaimsTable } from "@/components/claims/claims-table";
+import { Panel } from "@/components/data/panel";
+import { PageBody, PageHeader } from "@/components/shell/page-header";
 
 export const metadata: Metadata = { title: "Follow-ups" };
 
 export default function FollowUpsPage() {
   return (
-    <ModulePlaceholder
-      moduleKey="followups"
-      subtitle="Follow-ups due across the claims you can see"
-      milestone="M3"
-      description="Due, upcoming and overdue follow-ups, grouped by date and associate."
-    />
+    <>
+      <PageHeader
+        title="Follow-ups"
+        subtitle="Claims by their Follow-Up Date"
+      />
+      <PageBody>
+        <Suspense fallback={<Panel>Loading follow-ups…</Panel>}>
+          <ClaimsTable moduleKey="followups" />
+        </Suspense>
+      </PageBody>
+    </>
   );
 }

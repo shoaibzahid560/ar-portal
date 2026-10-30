@@ -8,12 +8,17 @@ import { cn } from "@/lib/cn";
 export function Table({ children }: { children: ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse [&_tbody_tr:last-child_td]:border-b-0">{children}</table>
+      <table className="w-full border-collapse [&_tbody_tr:last-child_td]:border-b-0">
+        {children}
+      </table>
     </div>
   );
 }
 
-export function Th({ className, ...props }: ThHTMLAttributes<HTMLTableCellElement>) {
+export function Th({
+  className,
+  ...props
+}: ThHTMLAttributes<HTMLTableCellElement>) {
   return (
     <th
       className={cn(
@@ -25,6 +30,17 @@ export function Th({ className, ...props }: ThHTMLAttributes<HTMLTableCellElemen
   );
 }
 
-export function Td({ className, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn("border-b border-[#f0f1f3] px-2 py-[9px] text-[12px]", className)} {...props} />;
+export function Td({
+  className,
+  ...props
+}: TdHTMLAttributes<HTMLTableCellElement>) {
+  return (
+    <td
+      className={cn(
+        "border-b border-[#f0f1f3] px-2 py-[9px] text-[12px]",
+        className,
+      )}
+      {...props}
+    />
+  );
 }

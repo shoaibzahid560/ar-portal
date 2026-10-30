@@ -1,4 +1,12 @@
-export function MetricCard({ label, value, meta }: { label: string; value: string; meta?: string }) {
+export function MetricCard({
+  label,
+  value,
+  meta,
+}: {
+  label: string;
+  value: string;
+  meta?: string;
+}) {
   return (
     <div className="rounded-[9px] border border-line bg-white p-3.5">
       <p className="text-[11px] text-muted">{label}</p>

@@ -14,7 +14,7 @@ import { formatDateTime } from "@/lib/format";
 import { getModule, resolveView } from "@/lib/navigation";
 import type { Tone } from "@/lib/status";
 
-const ACTIONS: Record<string, { label: string; tone: Tone }> = {
+export const ACTIONS: Record<string, { label: string; tone: Tone }> = {
   "auth.login": { label: "Signed in", tone: "ok" },
   "auth.logout": { label: "Signed out", tone: "neutral" },
   "auth.login_denied": { label: "Sign-in refused", tone: "danger" },
@@ -28,12 +28,26 @@ const ACTIONS: Record<string, { label: string; tone: Tone }> = {
   "team.created": { label: "Team added", tone: "info" },
   "team.updated": { label: "Team changed", tone: "info" },
   "role.permissions_changed": { label: "Permissions changed", tone: "warn" },
+  "list.option_added": { label: "Dropdown option added", tone: "info" },
+  "list.option_retired": { label: "Dropdown option retired", tone: "warn" },
+  "list.option_restored": { label: "Dropdown option restored", tone: "info" },
+  "upload.completed": { label: "Sheet uploaded", tone: "ok" },
+  "upload.failed": { label: "Upload failed", tone: "danger" },
+  "upload.downloaded": { label: "Upload file downloaded", tone: "warn" },
+  "claim.imported": { label: "Claim imported", tone: "neutral" },
+  "claim.updated": { label: "Claim changed", tone: "info" },
+  "claim.assigned": { label: "Claim assigned", tone: "info" },
+  "claim.note_added": { label: "Note added", tone: "neutral" },
+  "claim.eob_attached": { label: "EOB attached", tone: "info" },
+  "claim.eob_downloaded": { label: "EOB opened", tone: "warn" },
+  "claim.reviewed": { label: "Claim reviewed", tone: "ok" },
 };
 
 /** Which actions each Audit view shows. "admin" covers every change made through the admin screens. */
 const VIEW_ACTIONS: Record<string, string[]> = {
   access: ["auth."],
-  admin: ["user.", "practice.", "team.", "role."],
+  admin: ["user.", "practice.", "team.", "role.", "list."],
+  work: ["upload.", "claim."],
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

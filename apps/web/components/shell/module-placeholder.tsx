@@ -21,7 +21,10 @@ export function ModulePlaceholder({
       <PageHeader title={navModule.title} subtitle={subtitle} />
       <PageBody>
         <Panel>
-          <EmptyState title={`${navModule.title} is built in ${milestone}`} description={description} />
+          <EmptyState
+            title={`${navModule.title} is built in ${milestone}`}
+            description={description}
+          />
         </Panel>
       </PageBody>
     </>

@@ -9,7 +9,13 @@ const TONES: Record<Tone, string> = {
   danger: "bg-danger-soft text-danger-ink",
 };
 
-export function StatusPill({ label, tone = "neutral" }: { label: string; tone?: Tone }) {
+export function StatusPill({
+  label,
+  tone = "neutral",
+}: {
+  label: string;
+  tone?: Tone;
+}) {
   return (
     <span
       className={cn(

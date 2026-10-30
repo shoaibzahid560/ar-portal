@@ -30,6 +30,29 @@ function messageFrom(detail: Detail, status: number): string {
   return "Something went wrong. Please try again.";
 }
 
+/** For file uploads: sends multipart form data (the browser sets the boundary header itself). */
+export async function apiForm<T>(path: string, form: FormData): Promise<T> {
+  const response = await fetch(`/api${path}`, {
+    method: "POST",
+    body: form,
+    cache: "no-store",
+  });
+  if (response.status === 401) {
+    window.location.replace("/login");
+    throw new ApiError("Sign-in required.", 401);
+  }
+  if (!response.ok) {
+    let detail: Detail;
+    try {
+      detail = ((await response.json()) as { detail?: Detail }).detail;
+    } catch {
+      detail = undefined;
+    }
+    throw new ApiError(messageFrom(detail, response.status), response.status);
+  }
+  return (await response.json()) as T;
+}
+
 export async function api<T>(
   path: string,
   options: { method?: string; body?: unknown } = {},
@@ -120,3 +143,89 @@ export type AuditEvent = {
   after: Record<string, unknown> | null;
 };
 export type AuditPage = { events: AuditEvent[]; next_before_id: number | null };
+
+export type PersonRef = { id: string; name: string; role: string | null };
+
+export type ClaimListItem = {
+  id: string;
+  number: string;
+  practice: NamedRef;
+  patient_name: string;
+  service_date: string;
+  subscriber_id: string;
+  insurance_carrier: string;
+  billed: string;
+  claim_status: string | null;
+  action_taken: string | null;
+  followup_date: string | null;
+  assigned_to: PersonRef | null;
+  aging_days: number;
+  aging_bucket: string;
+  needs_review: boolean;
+};
+export type ClaimPage = { claims: ClaimListItem[]; total: number };
+
+export type ClaimNote = {
+  id: number;
+  body: string;
+  created_at: string;
+  author: PersonRef;
+};
+
+export type ClaimDetail = ClaimListItem & {
+  upload: { id: string; number: string };
+  patient_dob: string | null;
+  subscriber_name: string | null;
+  subscriber_dob: string | null;
+  allowed_amount: string | null;
+  recovered_amount: string | null;
+  patient_responsibility: string | null;
+  pay_status: string | null;
+  check_status: string | null;
+  cashed_date: string | null;
+  payment_posted_date: string | null;
+  eob: { file_name: string; uploaded_at: string } | null;
+  review_reason: string | null;
+  notes: ClaimNote[];
+  can_work: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Assignee = { id: string; name: string; role: string };
+
+export type ClaimSummary = {
+  total: number;
+  unassigned: number;
+  due_today: number;
+  overdue: number;
+  needs_review: number;
+  billed_total: string;
+  by_status: { status: string; count: number; billed: string }[];
+};
+
+export type ListOption = { id: number; value: string; active: boolean };
+export type ListKey =
+  "claim_status" | "pay_status" | "check_status" | "action_taken";
+export type Lists = Record<ListKey, ListOption[]>;
+
+export type Upload = {
+  id: string;
+  number: string;
+  practice: NamedRef;
+  uploaded_by: NamedRef;
+  file_name: string;
+  file_size: number;
+  status: "processing" | "completed" | "failed";
+  failure_reason: string | null;
+  total_rows: number;
+  created_claims: number;
+  duplicate_rows: number;
+  error_rows: number;
+  review_rows: number;
+  created_at: string;
+  completed_at: string | null;
+};
+export type UploadDetail = Upload & {
+  errors: { row_number: number; column: string; message: string }[];
+};

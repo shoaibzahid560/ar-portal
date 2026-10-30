@@ -12,6 +12,9 @@ pytestmark = requires_database
 EXPECTED_TABLES = {
     "alembic_version",
     "audit_events",
+    "claim_notes",
+    "claims",
+    "option_list_items",
     "permissions",
     "practices",
     "role_permissions",
@@ -19,6 +22,8 @@ EXPECTED_TABLES = {
     "sessions",
     "team_members",
     "teams",
+    "upload_errors",
+    "uploads",
     "user_practices",
     "users",
 }
@@ -46,7 +51,7 @@ def test_six_roles_are_seeded() -> None:
     }
 
 
-def test_system_admin_has_every_permission_and_associates_cannot_manage_users() -> None:
+def test_system_admin_has_every_permission_and_associates_only_work_claims() -> None:
     [(total,)] = _run("SELECT count(*) FROM ar.permissions")
     [(admin,)] = _run(
         "SELECT count(*) FROM ar.role_permissions rp JOIN ar.roles r ON r.id = rp.role_id "
@@ -57,7 +62,7 @@ def test_system_admin_has_every_permission_and_associates_cannot_manage_users() 
         "WHERE r.key = 'ar_associate'"
     )
     assert admin == total
-    assert {key for (key,) in associate} == {"dashboard.view"}
+    assert {key for (key,) in associate} == {"dashboard.view", "claims.view", "claims.work"}
 
 
 def test_audit_events_are_append_only() -> None:
@@ -94,3 +99,23 @@ def test_emails_must_be_lowercase() -> None:
 
 def test_models_match_the_migrations() -> None:
     command.check(alembic_config())
+
+
+def test_dropdowns_are_seeded_exactly_as_in_the_ar_sheet() -> None:
+    rows = _run("SELECT list_key, value FROM ar.option_list_items ORDER BY list_key, sort_order")
+    lists: dict[str, list[str]] = {}
+    for key, value in rows:
+        lists.setdefault(key, []).append(value)
+
+    assert lists["pay_status"] == ["Paid to Patient", "Paid to Practice"]
+    assert lists["check_status"] == [
+        "Check Deposited",
+        "Not issued yet",
+        "Reissued Check",
+        "Check Not Cashed",
+    ]
+    assert (
+        lists["claim_status"][0] == "Approved to pay" and lists["claim_status"][-1] == "Paid Under Capitation"
+    )
+    assert len(lists["claim_status"]) == 13 and len(lists["action_taken"]) == 10
+    assert lists["action_taken"][-1] == "Writed-off"

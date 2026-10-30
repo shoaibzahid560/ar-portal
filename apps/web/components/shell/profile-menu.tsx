@@ -37,10 +37,15 @@ export function ProfileMenu() {
         <div className="absolute top-[46px] right-0 z-50 w-[280px] rounded-[14px] border border-[#dfe4ea] bg-white p-2 text-ink shadow-[0_18px_45px_rgba(10,30,55,0.18)]">
           <div className="mb-1.5 border-b border-[#edf0f4] px-3 pt-3 pb-2.5">
             <p className="font-extrabold text-navy">{user.full_name}</p>
-            <p className="mt-0.5 text-[12px] break-all text-[#6b7280]">{user.email}</p>
+            <p className="mt-0.5 text-[12px] break-all text-[#6b7280]">
+              {user.email}
+            </p>
             <p className="mt-1.5 text-[11px] text-[#8a94a3]">{role.name}</p>
           </div>
-          <button type="button" className="w-full rounded-[9px] px-3 py-2.5 text-left text-[#243244] hover:bg-[#f3f6fa]">
+          <button
+            type="button"
+            className="w-full rounded-[9px] px-3 py-2.5 text-left text-[#243244] hover:bg-[#f3f6fa]"
+          >
             My profile
           </button>
           <div className="my-1 h-px bg-[#edf0f4]" />

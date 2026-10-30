@@ -8,7 +8,8 @@ import { APP_MONOGRAM, APP_NAME } from "@/lib/config";
 import { NotificationsMenu } from "./notifications-menu";
 import { ProfileMenu } from "./profile-menu";
 
-const roundButton = "flex size-[34px] items-center justify-center rounded-full bg-white/12 text-white hover:bg-white/20";
+const roundButton =
+  "flex size-[34px] items-center justify-center rounded-full bg-white/12 text-white hover:bg-white/20";
 
 export function TopBar() {
   const router = useRouter();
@@ -22,7 +23,10 @@ export function TopBar() {
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-3.5 bg-linear-to-r from-navy to-navy-2 px-3.5 text-white">
-      <Link href="/dashboard" className="flex items-center gap-2.5 text-[18px] font-bold tracking-[-0.2px] whitespace-nowrap">
+      <Link
+        href="/dashboard"
+        className="flex items-center gap-2.5 text-[18px] font-bold tracking-[-0.2px] whitespace-nowrap"
+      >
         <span className="flex size-10 items-center justify-center rounded-[9px] bg-white text-[15px] font-extrabold text-navy shadow-[0_2px_8px_rgba(0,0,0,0.22)]">
           {APP_MONOGRAM}
         </span>
@@ -30,10 +34,20 @@ export function TopBar() {
       </Link>
 
       <div className="flex gap-1.5 max-[560px]:hidden">
-        <button type="button" onClick={() => router.back()} aria-label="Go back" className={roundButton}>
+        <button
+          type="button"
+          onClick={() => router.back()}
+          aria-label="Go back"
+          className={roundButton}
+        >
           <ChevronLeft size={18} />
         </button>
-        <button type="button" onClick={() => router.forward()} aria-label="Go forward" className={roundButton}>
+        <button
+          type="button"
+          onClick={() => router.forward()}
+          aria-label="Go forward"
+          className={roundButton}
+        >
           <ChevronRight size={18} />
         </button>
       </div>

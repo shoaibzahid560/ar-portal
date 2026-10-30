@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Self
 from urllib.parse import quote, unquote
 
 from pydantic import field_validator, model_validator
@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     # Company Google Workspace domain, e.g. hiredbillingsupport.com. Required outside local development.
     allowed_google_domain: str = ""
+
+    # "Today" for follow-up dates and aging is the team's local date, not the server's.
+    business_timezone: str = "Asia/Karachi"
+
+    # Where uploaded files are kept. "local" writes to LOCAL_STORAGE_DIR on this computer (development only);
+    # deployed environments use Supabase Storage, configured in M0 step 7.
+    storage_backend: Literal["local"] = "local"
+    local_storage_dir: str = ".storage"
+    max_upload_bytes: int = 4 * 1024 * 1024  # Vercel accepts request bodies up to 4.5 MB
 
     @field_validator("database_url")
     @classmethod
@@ -68,7 +77,7 @@ class Settings(BaseSettings):
         return value.strip().lower()
 
     @model_validator(mode="after")
-    def require_company_domain_outside_local(self) -> "Settings":
+    def require_company_domain_outside_local(self) -> Self:
         if self.app_env != "local" and not self.allowed_google_domain:
             raise ValueError("ALLOWED_GOOGLE_DOMAIN must be set outside local development")
         return self

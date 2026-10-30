@@ -52,8 +52,14 @@ export function Dialog({
               <X size={18} />
             </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto p-[18px]">{children}</div>
-          {footer && <div className="flex justify-end gap-2 border-t border-line px-[18px] py-3">{footer}</div>}
+          <div className="min-h-0 flex-1 overflow-auto p-[18px]">
+            {children}
+          </div>
+          {footer && (
+            <div className="flex justify-end gap-2 border-t border-line px-[18px] py-3">
+              {footer}
+            </div>
+          )}
         </div>
       )}
     </dialog>

@@ -8,7 +8,8 @@ const dateFormatter = new Intl.DateTimeFormat("en-GB", {
 const moneyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 
 /** "2026-10-26" -> "26 Oct 2026" (dates are stored as plain calendar dates) */
@@ -17,8 +18,9 @@ export function formatDate(isoDate: string | null): string {
   return dateFormatter.format(new Date(`${isoDate}T00:00:00Z`));
 }
 
-export function formatMoney(amount: number): string {
-  return moneyFormatter.format(amount);
+export function formatMoney(amount: number | string | null): string {
+  if (amount === null || amount === "") return "—";
+  return moneyFormatter.format(Number(amount));
 }
 
 export function formatCount(value: number): string {

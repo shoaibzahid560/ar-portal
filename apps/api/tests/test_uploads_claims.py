@@ -1,0 +1,314 @@
+"""Uploading AR sheets and working claims, against a real database. Uses the synthetic sample files."""
+
+from collections.abc import Iterator
+from datetime import timedelta
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.core.clock import business_today
+from tests.auth_helpers import app_uses_test_database, browser_for
+from tests.db import migrate_fresh, requires_database, run_sql
+
+pytestmark = requires_database
+
+FIXTURES = Path(__file__).parent / "fixtures"
+WEEK_1 = FIXTURES / "Sample_Practice_AR-HBS_10-22-2026_sheet.xlsx"
+WEEK_2 = FIXTURES / "Sample_Practice_AR-HBS_10-29-2026_sheet.xlsx"
+
+ADMIN, MANAGEMENT, LEAD = "admin@example.com", "management@example.com", "lead@example.com"
+ASSOC, ASSOC_2, OUTSIDER = "assoc@example.com", "assoc2@example.com", "outsider@example.com"
+
+
+def one(sql: str) -> object:
+    [(value,)] = run_sql(sql)
+    return value
+
+
+def practice_id(name: str) -> str:
+    return str(one(f"SELECT id FROM ar.practices WHERE name = '{name}'"))
+
+
+def user_id(email: str) -> str:
+    return str(one(f"SELECT id FROM ar.users WHERE email = '{email}'"))
+
+
+@pytest.fixture(scope="module", autouse=True)
+def database() -> Iterator[None]:
+    """Practice One: lead, two associates. Practice Two: the outsider associate."""
+    migrate_fresh()
+    for statement in (
+        f"""
+        INSERT INTO ar.users (email, full_name, role_id)
+        SELECT v.email, v.name, r.id
+        FROM (VALUES ('{ADMIN}', 'Admin', 'system_admin'),
+                     ('{MANAGEMENT}', 'Management', 'management'),
+                     ('{LEAD}', 'Lead', 'ar_lead'),
+                     ('{ASSOC}', 'Associate One', 'ar_associate'),
+                     ('{ASSOC_2}', 'Associate Two', 'ar_associate'),
+                     ('{OUTSIDER}', 'Outsider', 'ar_associate')) AS v(email, name, role_key)
+        JOIN ar.roles r ON r.key = v.role_key
+        """,
+        "INSERT INTO ar.practices (name) VALUES ('Practice One'), ('Practice Two')",
+        f"""
+        INSERT INTO ar.user_practices (user_id, practice_id)
+        SELECT u.id, p.id FROM ar.users u, ar.practices p
+        WHERE (u.email IN ('{LEAD}', '{ASSOC}', '{ASSOC_2}') AND p.name = 'Practice One')
+           OR (u.email = '{OUTSIDER}' AND p.name = 'Practice Two')
+        """,
+    ):
+        run_sql(statement, commit=True)
+    with app_uses_test_database():
+        yield
+
+
+def upload(browser: TestClient, practice: str, path: Path, name: str | None = None) -> dict:
+    response = browser.post(
+        "/api/uploads",
+        data={"practice_id": practice_id(practice)},
+        files={"file": (name or path.name, path.read_bytes())},
+    )
+    return {"status_code": response.status_code, **response.json()}
+
+
+def first_claim(browser: TestClient, **params: str) -> dict:
+    return browser.get("/api/claims", params={"limit": "1", **params}).json()["claims"][0]
+
+
+# ---- Uploads ----------------------------------------------------------------------------------------
+
+
+def test_lead_uploads_the_week_one_sheet(monkeypatch: pytest.MonkeyPatch) -> None:
+    lead = browser_for(monkeypatch, LEAD)
+
+    result = upload(lead, "Practice One", WEEK_1)
+
+    assert result["status_code"] == 201, result
+    assert result["status"] == "completed"
+    assert result["total_rows"] == 87 and result["created_claims"] == 87
+    assert result["duplicate_rows"] == 0 and result["error_rows"] == 0
+    assert one("SELECT count(*) FROM ar.audit_events WHERE action = 'claim.imported'") == 87
+
+
+def test_same_file_twice_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    result = upload(browser_for(monkeypatch, LEAD), "Practice One", WEEK_1)
+
+    assert result["status_code"] == 409
+    assert "already uploaded as UPL-" in result["detail"]
+
+
+def test_next_weeks_sheet_skips_carried_over_lines_and_flags_a_changed_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = upload(browser_for(monkeypatch, LEAD), "Practice One", WEEK_2)
+
+    assert result["total_rows"] == 82
+    assert result["duplicate_rows"] == 71  # the lines carried over from week one
+    assert result["created_claims"] == 11  # 10 new visits + 1 line whose amount changed
+    assert result["review_rows"] == 1  # that changed line, flagged for a person to check
+    assert one("SELECT count(*) FROM ar.claims") == 98
+
+
+def test_uploads_are_limited_to_the_practices_in_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert upload(browser_for(monkeypatch, LEAD), "Practice Two", WEEK_1)["status_code"] == 403
+    assert upload(browser_for(monkeypatch, ASSOC), "Practice One", WEEK_1)["status_code"] == 403
+
+
+def test_row_problems_are_listed_and_the_report_has_no_cell_values(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    sheet = tmp_path / "with-errors.csv"
+    sheet.write_text(
+        "Patient,Service Date,Subscriber ID,Insurance Carrier,Billed\n"
+        "Test Patient A,10-01-26,111,Aetna,100\n"
+        "Test Patient B,someday,222,Aetna,100\n"
+        "Test Patient C,10-02-26,333,Aetna,lots\n"
+    )
+    admin = browser_for(monkeypatch, ADMIN)
+
+    result = upload(admin, "Practice Two", sheet)
+    report = admin.get(f"/api/uploads/{result['id']}/errors.csv").text
+
+    assert result["status"] == "completed"
+    assert (result["total_rows"], result["created_claims"], result["error_rows"]) == (3, 1, 2)
+    assert [(e["row_number"], e["column"]) for e in result["errors"]] == [(3, "Service Date"), (4, "Billed")]
+    assert "someday" not in report and "lots" not in report and "Test Patient" not in report
+
+
+def test_unreadable_file_is_recorded_as_failed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    sheet = tmp_path / "broken.xlsx"
+    sheet.write_bytes(b"this is not a workbook")
+
+    result = upload(browser_for(monkeypatch, ADMIN), "Practice Two", sheet)
+
+    assert result["status"] == "failed"
+    assert "couldn't be opened" in result["failure_reason"]
+    assert one("SELECT count(*) FROM ar.audit_events WHERE action = 'upload.failed'") == 1
+
+
+# ---- Who sees which claims ------------------------------------------------------------------------------
+
+
+def test_associates_see_only_their_own_claims_and_others_see_their_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    associate = browser_for(monkeypatch, ASSOC)
+    lead = browser_for(monkeypatch, LEAD)
+    management = browser_for(monkeypatch, MANAGEMENT)
+    outsider = browser_for(monkeypatch, OUTSIDER)
+
+    assert associate.get("/api/claims").json()["total"] == 0
+    assert lead.get("/api/claims").json()["total"] == 98
+    assert management.get("/api/claims").json()["total"] == 99  # includes Practice Two's claim
+    assert outsider.get("/api/claims").json()["total"] == 0
+
+
+# ---- Working a claim ----------------------------------------------------------------------------------
+
+
+def test_lead_assigns_and_the_associate_works_the_claim(monkeypatch: pytest.MonkeyPatch) -> None:
+    lead = browser_for(monkeypatch, LEAD)
+    claim = first_claim(lead)
+    options = {a["name"] for a in lead.get(f"/api/claims/{claim['id']}/assignees").json()}
+    assert options == {"Lead", "Associate One", "Associate Two"}  # the outsider works elsewhere
+
+    assigned = lead.patch(f"/api/claims/{claim['id']}", json={"assigned_user_id": user_id(ASSOC)})
+    assert assigned.status_code == 200 and assigned.json()["assigned_to"]["name"] == "Associate One"
+
+    associate = browser_for(monkeypatch, ASSOC)
+    before = one("SELECT count(*) FROM ar.audit_events WHERE action = 'claim.updated'")
+    worked = associate.patch(
+        f"/api/claims/{claim['id']}",
+        json={
+            "claim_status": "In- Process",
+            "action_taken": "Called Insurance",
+            "allowed_amount": "120.50",
+            "followup_date": str(business_today() + timedelta(days=7)),
+        },
+    )
+
+    assert worked.status_code == 200, worked.text
+    body = worked.json()
+    assert body["claim_status"] == "In- Process" and body["allowed_amount"] == "120.50"
+    assert one("SELECT count(*) FROM ar.audit_events WHERE action = 'claim.updated'") == before + 1
+
+
+def test_work_fields_are_validated(monkeypatch: pytest.MonkeyPatch) -> None:
+    lead = browser_for(monkeypatch, LEAD)
+    claim = first_claim(lead)
+
+    assert lead.patch(f"/api/claims/{claim['id']}", json={"claim_status": "Made up"}).status_code == 400
+    assert lead.patch(f"/api/claims/{claim['id']}", json={"recovered_amount": "-5"}).status_code == 422
+    assert lead.patch(f"/api/claims/{claim['id']}", json={"recovered_amount": "1.234"}).status_code == 422
+    assert (
+        lead.patch(f"/api/claims/{claim['id']}", json={"billed": "1"}).status_code == 422
+    )  # upload data is read-only
+
+
+def test_claims_cannot_be_assigned_outside_the_practice(monkeypatch: pytest.MonkeyPatch) -> None:
+    lead = browser_for(monkeypatch, LEAD)
+    claim = first_claim(lead, view="unassigned")
+
+    response = lead.patch(f"/api/claims/{claim['id']}", json={"assigned_user_id": user_id(OUTSIDER)})
+
+    assert response.status_code == 400
+
+
+def test_an_associate_can_hand_a_claim_to_a_colleague(monkeypatch: pytest.MonkeyPatch) -> None:
+    associate = browser_for(monkeypatch, ASSOC)
+    claim = first_claim(associate, view="mine")
+
+    handed = associate.patch(f"/api/claims/{claim['id']}", json={"assigned_user_id": user_id(ASSOC_2)})
+
+    assert handed.status_code == 200
+    assert associate.get(f"/api/claims/{claim['id']}").status_code == 404  # no longer theirs
+    assert browser_for(monkeypatch, ASSOC_2).get(f"/api/claims/{claim['id']}").status_code == 200
+    assert one("SELECT count(*) FROM ar.audit_events WHERE action = 'claim.assigned'") == 2
+
+
+def test_notes_and_eob(monkeypatch: pytest.MonkeyPatch) -> None:
+    worker = browser_for(monkeypatch, ASSOC_2)
+    claim = first_claim(worker, view="mine")
+
+    noted = worker.post(f"/api/claims/{claim['id']}/notes", json={"body": "Called payer, reference 4821."})
+    attached = worker.post(
+        f"/api/claims/{claim['id']}/eob", files={"file": ("eob.pdf", b"%PDF-1.4 sample", "application/pdf")}
+    )
+    wrong_type = worker.post(f"/api/claims/{claim['id']}/eob", files={"file": ("eob.exe", b"MZ", "x")})
+    download = worker.get(f"/api/claims/{claim['id']}/eob")
+
+    assert noted.status_code == 201 and noted.json()["notes"][0]["body"] == "Called payer, reference 4821."
+    assert attached.json()["eob"]["file_name"] == "eob.pdf"
+    assert wrong_type.status_code == 400
+    assert download.content == b"%PDF-1.4 sample"
+    assert one("SELECT count(*) FROM ar.audit_events WHERE action = 'claim.eob_downloaded'") == 1
+    history = worker.get(f"/api/claims/{claim['id']}/history").json()
+    assert {"claim.imported", "claim.assigned", "claim.note_added", "claim.eob_attached"} <= {
+        e["action"] for e in history
+    }
+
+
+def test_management_can_view_but_not_work_claims(monkeypatch: pytest.MonkeyPatch) -> None:
+    management = browser_for(monkeypatch, MANAGEMENT)
+    claim = first_claim(management)
+
+    assert management.get(f"/api/claims/{claim['id']}").json()["can_work"] is False
+    assert management.patch(f"/api/claims/{claim['id']}", json={"claim_status": "Paid"}).status_code == 403
+
+
+def test_review_flag_can_be_cleared(monkeypatch: pytest.MonkeyPatch) -> None:
+    lead = browser_for(monkeypatch, LEAD)
+    flagged = first_claim(lead, view="needs-review")
+
+    cleared = lead.patch(f"/api/claims/{flagged['id']}", json={"needs_review": False})
+
+    assert cleared.json()["needs_review"] is False
+    assert lead.get("/api/claims/counts").json()["needs-review"] == 0
+
+
+# ---- Views, counts, dashboard --------------------------------------------------------------------------
+
+
+def test_follow_up_views_and_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    lead = browser_for(monkeypatch, LEAD)
+    ids = [
+        c["id"] for c in lead.get("/api/claims", params={"limit": "3", "view": "unassigned"}).json()["claims"]
+    ]
+    today = business_today()
+    lead.patch(f"/api/claims/{ids[0]}", json={"followup_date": str(today)})
+    lead.patch(f"/api/claims/{ids[1]}", json={"followup_date": str(today - timedelta(days=2))})
+    lead.patch(f"/api/claims/{ids[2]}", json={"followup_date": str(today + timedelta(days=1))})
+
+    counts = lead.get("/api/claims/counts").json()
+    summary = lead.get("/api/claims/summary").json()
+
+    assert counts["due-today"] == 1 and counts["overdue"] == 1 and counts["tomorrow"] == 1
+    assert summary["total"] == 98 and summary["due_today"] == 1 and summary["overdue"] == 1
+    assert sum(s["count"] for s in summary["by_status"]) == 98
+
+
+# ---- Dropdown lists ------------------------------------------------------------------------------------
+
+
+def test_dropdowns_match_the_sheet_and_can_be_edited(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = browser_for(monkeypatch, ADMIN)
+    lists = admin.get("/api/lists").json()
+    assert [o["value"] for o in lists["pay_status"]] == ["Paid to Patient", "Paid to Practice"]
+    assert (
+        len(lists["claim_status"]) == 13
+        and len(lists["action_taken"]) == 10
+        and len(lists["check_status"]) == 4
+    )
+
+    added = admin.post("/api/lists/claim_status", json={"value": "Appeal filed"})
+    assert added.status_code == 201 and added.json()["claim_status"][-1]["value"] == "Appeal filed"
+
+    paid = next(o for o in lists["claim_status"] if o["value"] == "Paid")
+    admin.patch(f"/api/lists/items/{paid['id']}", json={"active": False})
+    claim = first_claim(admin)
+    assert admin.patch(f"/api/claims/{claim['id']}", json={"claim_status": "Paid"}).status_code == 400
+    admin.patch(f"/api/lists/items/{paid['id']}", json={"active": True})
+
+    lead = browser_for(monkeypatch, LEAD)
+    assert lead.post("/api/lists/claim_status", json={"value": "Nope"}).status_code == 403

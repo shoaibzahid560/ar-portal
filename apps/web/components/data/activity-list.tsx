@@ -1,9 +1,19 @@
-import type { ActivityItem } from "@/lib/sample-data";
 import { StatusPill } from "./status-pill";
+import type { Tone } from "@/lib/status";
+
+export type ActivityItem = {
+  id: string | number;
+  title: string;
+  detail: string;
+  when: string;
+  pill: { label: string; tone: Tone };
+};
 
 export function ActivityList({ items }: { items: ActivityItem[] }) {
   if (items.length === 0) {
-    return <p className="py-10 text-center text-muted">No activity recorded yet.</p>;
+    return (
+      <p className="py-10 text-center text-muted">No activity recorded yet.</p>
+    );
   }
   return (
     <ul>

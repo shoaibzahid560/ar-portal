@@ -24,7 +24,7 @@ export type NavModule = {
   icon: LucideIcon;
   /**
    * Permission needed to see this module. null means visible to everyone until the module that
-   * builds it adds its permission (uploads in M1, review in M2, claims and follow-ups in M3, reports in M6).
+   * builds it adds its permission (review in M2, reports in M6).
    */
   permission: string | null;
   placement: "main" | "admin";
@@ -57,12 +57,11 @@ export const NAV_MODULES: NavModule[] = [
     title: "Uploads",
     href: "/uploads",
     icon: Upload,
-    permission: null,
+    permission: "uploads.view",
     placement: "main",
     views: [
       { slug: "all", label: "All Uploads" },
-      { slug: "processing", label: "Processing" },
-      { slug: "needs-review", label: "Needs Review" },
+      { slug: "with-errors", label: "With Errors" },
       { slug: "failed", label: "Failed" },
     ],
   },
@@ -85,17 +84,15 @@ export const NAV_MODULES: NavModule[] = [
     title: "Claims",
     href: "/claims",
     icon: FileText,
-    permission: null,
+    permission: "claims.view",
     placement: "main",
     views: [
       { slug: "all", label: "All Claims" },
       { slug: "mine", label: "My Claims" },
       { slug: "unassigned", label: "Unassigned" },
-      { slug: "followup-due", label: "Follow-up Due" },
+      { slug: "due-today", label: "Follow-up Due" },
       { slug: "overdue", label: "Overdue" },
-      { slug: "returned", label: "Returned" },
-      { slug: "pending-review", label: "Pending Review" },
-      { slug: "closed", label: "Closed" },
+      { slug: "needs-review", label: "Needs Review" },
     ],
   },
   {
@@ -104,7 +101,7 @@ export const NAV_MODULES: NavModule[] = [
     title: "Follow-ups",
     href: "/followups",
     icon: CalendarClock,
-    permission: null,
+    permission: "claims.view",
     placement: "main",
     views: [
       { slug: "due-today", label: "Due Today" },
@@ -134,9 +131,10 @@ export const NAV_MODULES: NavModule[] = [
     icon: ShieldCheck,
     permission: "audit.view",
     placement: "main",
-    // Claim timelines, field changes and exports are added with claims (M4) and reports (M6).
+    // Each claim's own timeline is on the claim screen. Export logs are added with reports (M6).
     views: [
       { slug: "all", label: "All Events" },
+      { slug: "work", label: "Uploads & Claims" },
       { slug: "access", label: "Sign-ins" },
       { slug: "admin", label: "Admin Changes" },
     ],
@@ -181,6 +179,7 @@ export const NAV_MODULES: NavModule[] = [
     placement: "admin",
     views: [
       { slug: "roles", label: "Roles & Permissions" },
+      { slug: "lists", label: "Dropdown Lists" },
       { slug: "general", label: "General" },
     ],
   },
