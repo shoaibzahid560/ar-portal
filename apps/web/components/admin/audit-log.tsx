@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/data/empty-state";
@@ -40,7 +41,12 @@ export const ACTIONS: Record<string, { label: string; tone: Tone }> = {
   "claim.note_added": { label: "Note added", tone: "neutral" },
   "claim.eob_attached": { label: "EOB attached", tone: "info" },
   "claim.eob_downloaded": { label: "EOB opened", tone: "warn" },
-  "claim.reviewed": { label: "Claim reviewed", tone: "ok" },
+  "claim.reviewed": { label: "Kept as a separate claim", tone: "ok" },
+  "claim.merged": { label: "Line merged into a claim", tone: "info" },
+  "claim.updated_from_upload": {
+    label: "Claim updated from a newer line",
+    tone: "info",
+  },
 };
 
 /** Which actions each Audit view shows. "admin" covers every change made through the admin screens. */
@@ -60,19 +66,29 @@ function show(value: unknown): string {
   return UUID.test(text) ? `${text.slice(0, 8)}…` : text;
 }
 
-/** One line per changed field, in plain words. IDs are summarised rather than shown. */
+// Bookkeeping values that mean nothing to a reader.
+const HIDDEN_KEYS = new Set(["note_id", "characters", "bulk", "from_line"]);
+
+/** One line per changed field, in plain words. IDs are summarised, and people are named. */
 function describe(event: AuditEvent): string[] {
+  if (event.summary) return event.summary;
   const after = event.after ?? {};
   const before = event.before ?? {};
-  return Object.keys(after).map((key) => {
-    const label = key
-      .replace(/_ids$/, "s")
-      .replace(/_user_id$|_id$/, "")
-      .replace(/_/g, " ");
-    return key in before
-      ? `${label}: ${show(before[key])} → ${show(after[key])}`
-      : `${label}: ${show(after[key])}`;
-  });
+  const value = (key: string, raw: unknown) =>
+    key === "assigned_user_id" && raw
+      ? (event.people?.[String(raw)] ?? show(raw))
+      : show(raw);
+  return Object.keys(after)
+    .filter((key) => !HIDDEN_KEYS.has(key))
+    .map((key) => {
+      const label = key
+        .replace(/_ids$/, "s")
+        .replace(/_user_id$|_id$/, "")
+        .replace(/_/g, " ");
+      return key in before
+        ? `${label}: ${value(key, before[key])} → ${value(key, after[key])}`
+        : `${label}: ${value(key, after[key])}`;
+    });
 }
 
 type Filters = { prefixes: string[]; dateFrom: string; dateTo: string };
@@ -269,16 +285,31 @@ export function AuditLog() {
                     </Td>
                     <Td>
                       <p className="capitalize">{e.entity_type}</p>
-                      <p
-                        className="font-mono text-[10px] text-muted"
-                        title={e.entity_id}
-                      >
-                        {e.entity_id.length > 24
-                          ? `${e.entity_id.slice(0, 8)}…`
-                          : e.entity_id}
-                      </p>
+                      {e.label && e.link ? (
+                        <Link
+                          href={e.link}
+                          className="font-semibold text-brand"
+                        >
+                          {e.label}
+                        </Link>
+                      ) : (
+                        <p
+                          className="font-mono text-[10px] text-muted"
+                          title={e.entity_id}
+                        >
+                          {e.label ??
+                            (e.entity_id.length > 24
+                              ? `${e.entity_id.slice(0, 8)}…`
+                              : e.entity_id)}
+                        </p>
+                      )}
                     </Td>
                     <Td className="pr-[15px]">
+                      {e.note && (
+                        <p className="mb-1 max-w-[520px] border-l-2 border-line pl-2 text-[11px] whitespace-pre-wrap">
+                          {e.note}
+                        </p>
+                      )}
                       {describe(e).map((line) => (
                         <p key={line} className="text-[11px]">
                           {line}

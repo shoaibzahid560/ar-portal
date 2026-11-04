@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.core.context import Ctx, require
 from app.core.scope import get_scope
 from app.core.storage import get_storage
+from app.modules.notifications import service as notify
 from app.modules.uploads import service
 from app.modules.uploads.models import Upload
 from app.modules.uploads.schemas import UploadDetail, UploadOut, upload_label
@@ -93,6 +94,14 @@ async def original_file(ctx: CanView, upload_id: uuid.UUID) -> Response:
         entity_id=upload.id,
         actor_user_id=ctx.user.id,
         practice_id=upload.practice_id,
+    )
+    notify.send(
+        ctx.db,
+        await notify.oversight(ctx.db),
+        kind="upload.downloaded",
+        title=f"{ctx.user.full_name} downloaded the original file of {upload_label(upload.number)}",
+        link=f"/uploads/{upload.id}",
+        actor=ctx.user.id,
     )
     await ctx.db.commit()
     safe = "".join(ch for ch in upload.file_name if ch.isalnum() or ch in "._- ") or "upload"

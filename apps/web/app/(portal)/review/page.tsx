@@ -1,15 +1,23 @@
 import type { Metadata } from "next";
-import { ModulePlaceholder } from "@/components/shell/module-placeholder";
+import { Suspense } from "react";
+import { Panel } from "@/components/data/panel";
+import { ReviewQueue } from "@/components/review/review-queue";
+import { PageBody, PageHeader } from "@/components/shell/page-header";
 
 export const metadata: Metadata = { title: "Review Queue" };
 
-export default function ReviewQueuePage() {
+export default function ReviewPage() {
   return (
-    <ModulePlaceholder
-      moduleKey="review"
-      subtitle="Resolve possible duplicates and conflicting values"
-      milestone="M2"
-      description="Rows the matching rules can't settle automatically will wait here for a person to decide."
-    />
+    <>
+      <PageHeader
+        title="Review Queue"
+        subtitle="Uploaded lines that may belong to a claim already in the system"
+      />
+      <PageBody>
+        <Suspense fallback={<Panel>Loading…</Panel>}>
+          <ReviewQueue />
+        </Suspense>
+      </PageBody>
+    </>
   );
 }

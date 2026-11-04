@@ -71,11 +71,11 @@ export const NAV_MODULES: NavModule[] = [
     title: "Review Queue",
     href: "/review",
     icon: GitCompareArrows,
-    permission: null,
+    permission: "claims.review",
     placement: "main",
     views: [
-      { slug: "ambiguous", label: "Ambiguous Matches" },
-      { slug: "conflicts", label: "Conflicts" },
+      { slug: "open", label: "Needs Review" },
+      { slug: "merged", label: "Merged Lines" },
     ],
   },
   {

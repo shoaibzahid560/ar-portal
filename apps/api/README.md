@@ -74,8 +74,22 @@ valid line becomes a claim; lines already in the system are skipped; problems ar
 without repeating cell values. The work columns from the sheet (Claim Status, Pay Status, Check
 Status, Action Taken, amounts, dates, notes, EOB, Assigned To) are filled in on each claim.
 
+Claims can be assigned one at a time or in bulk (tick claims in the list). A new line for a patient,
+subscriber ID and service date that already has a claim waits in the **Review Queue**: a reviewer
+(System Administrator, AR Manager or AR Lead; the `claims.review` permission) decides whether it is
+the same claim (the earlier claim takes its uploaded values and the line is folded in) or a separate
+claim (both stay).
+
 During local development, uploaded files are stored in `apps/api/.storage/` (ignored by Git).
 Deployed environments will use a private Supabase Storage bucket (M0 step 7).
+
+## Notifications (M5)
+
+The bell shows each person's own notifications (brief, section 8): assignments and hand-offs, notes
+from colleagues, follow-ups due or overdue, upload errors and lines waiting for review, and, for
+holders of `notifications.oversight` (Management, System Administrator), every upload, assignment,
+file download, user or permission change and refused sign-in. Titles never contain patient details.
+Follow-up reminders are created when the person next opens the portal, so no background job is needed.
 
 ## Layout
 

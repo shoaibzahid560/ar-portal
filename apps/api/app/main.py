@@ -6,6 +6,7 @@ from app.modules.auth.router import router as auth_router
 from app.modules.claims.router import router as claims_router
 from app.modules.health.router import router as health_router
 from app.modules.lists.router import router as lists_router
+from app.modules.notifications.router import router as notifications_router
 from app.modules.practices.router import router as practices_router
 from app.modules.roles.router import router as roles_router
 from app.modules.uploads.router import router as uploads_router
@@ -32,3 +33,4 @@ app.include_router(audit_router, prefix="/api")
 app.include_router(uploads_router, prefix="/api")
 app.include_router(claims_router, prefix="/api")
 app.include_router(lists_router, prefix="/api")
+app.include_router(notifications_router, prefix="/api")

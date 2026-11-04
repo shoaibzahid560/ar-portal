@@ -191,6 +191,13 @@ def test_role_change_takes_effect_on_the_next_request(monkeypatch: pytest.Monkey
     set_role_permissions(monkeypatch, "ar_associate", ["dashboard.view", "users.view"])
     try:
         assert associate.get("/api/users").status_code == 200
+        admin = browser_for(monkeypatch, ADMIN)
+        [latest] = admin.get(
+            "/api/audit-events", params={"action": "role.permissions_changed", "limit": "1"}
+        ).json()["events"]
+        assert latest["label"] == "AR Associate"
+        assert any(line.startswith("Added: ") for line in latest["summary"])
+        assert any(line.startswith("Removed: ") for line in latest["summary"])
     finally:
         set_role_permissions(monkeypatch, "ar_associate", ["dashboard.view"])
     assert audit_count("role.permissions_changed") >= 2

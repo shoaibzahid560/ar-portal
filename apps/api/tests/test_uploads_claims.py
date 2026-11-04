@@ -257,6 +257,18 @@ def test_management_can_view_but_not_work_claims(monkeypatch: pytest.MonkeyPatch
     assert management.patch(f"/api/claims/{claim['id']}", json={"claim_status": "Paid"}).status_code == 403
 
 
+def test_view_only_roles_see_who_a_claim_was_assigned_to(monkeypatch: pytest.MonkeyPatch) -> None:
+    lead = browser_for(monkeypatch, LEAD)
+    claim = first_claim(lead, view="unassigned")
+    lead.patch(f"/api/claims/{claim['id']}", json={"assigned_user_id": user_id(ASSOC)})
+
+    history = browser_for(monkeypatch, MANAGEMENT).get(f"/api/claims/{claim['id']}/history").json()
+    assigned = next(e for e in history if e["action"] == "claim.assigned")
+
+    assert assigned["people"] == {user_id(ASSOC): "Associate One"}
+    assert assigned["actor"]["name"] == "Lead"
+
+
 def test_review_flag_can_be_cleared(monkeypatch: pytest.MonkeyPatch) -> None:
     lead = browser_for(monkeypatch, LEAD)
     flagged = first_claim(lead, view="needs-review")
@@ -312,3 +324,28 @@ def test_dropdowns_match_the_sheet_and_can_be_edited(monkeypatch: pytest.MonkeyP
 
     lead = browser_for(monkeypatch, LEAD)
     assert lead.post("/api/lists/claim_status", json={"value": "Nope"}).status_code == 403
+
+
+def test_audit_log_shows_note_text_to_those_who_may_see_the_claim(monkeypatch: pytest.MonkeyPatch) -> None:
+    management = browser_for(monkeypatch, MANAGEMENT)
+    [event] = management.get("/api/audit-events", params={"action": "claim.note_added"}).json()["events"]
+
+    assert event["note"] == "Called payer, reference 4821."
+    assert event["label"].startswith("CLM-") and event["link"].startswith("/claims/")
+
+    run_sql(
+        "INSERT INTO ar.users (email, full_name, role_id) "
+        "SELECT 'auditor2@example.com', 'Scoped Auditor', id FROM ar.roles WHERE key = 'auditor'",
+        commit=True,
+    )
+    run_sql(
+        "INSERT INTO ar.user_practices (user_id, practice_id) "
+        "SELECT u.id, p.id FROM ar.users u, ar.practices p "
+        "WHERE u.email = 'auditor2@example.com' AND p.name = 'Practice Two'",
+        commit=True,
+    )
+    auditor = browser_for(monkeypatch, "auditor2@example.com")
+    [seen_by_auditor] = auditor.get("/api/audit-events", params={"action": "claim.note_added"}).json()[
+        "events"
+    ]
+    assert seen_by_auditor["note"] is None  # the claim belongs to a practice outside the auditor's scope

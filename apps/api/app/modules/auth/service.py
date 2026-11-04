@@ -12,6 +12,7 @@ from app.core.security import hash_token, new_token
 from app.modules.auth import repository
 from app.modules.auth.google import GoogleIdentity
 from app.modules.auth.models import UserSession
+from app.modules.notifications import service as notify
 from app.modules.users.models import User
 
 IDLE_TIMEOUT = timedelta(minutes=30)
@@ -62,6 +63,16 @@ async def sign_in(
             entity_id=identity.email,
             actor_user_id=user.id if user else None,
             after={"reason": str(reason)},
+        )
+        notify.send(
+            db,
+            await notify.oversight(db),
+            kind="auth.login_denied",
+            title=f"Sign-in refused for {identity.email}",
+            body="Not a registered, active account."
+            if reason == DenialReason.NOT_REGISTERED
+            else "Not a company account.",
+            link="/audit?view=access",
         )
         await db.commit()
         return None, reason

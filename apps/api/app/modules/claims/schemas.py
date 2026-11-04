@@ -9,7 +9,7 @@ from app.core.schemas import NamedRef
 
 Money = Annotated[Decimal, Field(ge=0, le=Decimal("9999999.99"), max_digits=12, decimal_places=2)]
 
-ClaimView = Literal["all", "mine", "unassigned", "due-today", "tomorrow", "overdue", "needs-review"]
+ClaimView = Literal["all", "mine", "unassigned", "due-today", "tomorrow", "overdue", "needs-review", "merged"]
 
 
 def claim_label(number: int) -> str:
@@ -20,6 +20,11 @@ class PersonRef(BaseModel):
     id: uuid.UUID
     name: str
     role: str | None = None
+
+
+class ClaimRef(BaseModel):
+    id: uuid.UUID
+    number: str
 
 
 class ClaimListItem(BaseModel):
@@ -38,6 +43,7 @@ class ClaimListItem(BaseModel):
     aging_days: int
     aging_bucket: str
     needs_review: bool
+    merged_into: ClaimRef | None = None
 
 
 class ClaimPage(BaseModel):
@@ -78,6 +84,7 @@ class ClaimDetail(ClaimListItem):
     review_reason: str | None
     notes: list[NoteOut]
     can_work: bool
+    can_review: bool
     created_at: datetime
     updated_at: datetime
 
@@ -135,3 +142,23 @@ class ClaimSummary(BaseModel):
     needs_review: int
     billed_total: Decimal
     by_status: list[StatusCount]
+
+
+class BulkAssign(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claim_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    assigned_user_id: uuid.UUID | None
+
+
+class BulkResult(BaseModel):
+    updated: int
+
+
+class Resolve(BaseModel):
+    """A reviewer's decision on a line that needs review."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    decision: Literal["same", "separate"]
+    target_id: uuid.UUID | None = None

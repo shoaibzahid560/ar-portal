@@ -110,7 +110,23 @@ export function ClaimWork() {
         </span>
       </div>
 
-      {c.needs_review && <ReviewBanner claim={c} onDone={refresh} />}
+      {c.needs_review && <ReviewBanner claim={c} />}
+      {c.merged_into && (
+        <p
+          role="status"
+          className="mb-3 rounded-[9px] bg-info-soft px-3 py-2.5 text-[12px]"
+        >
+          A reviewer decided this line is the same claim as{" "}
+          <Link
+            href={`/claims/${c.merged_into.id}`}
+            className="font-bold text-brand"
+          >
+            {c.merged_into.number}
+          </Link>
+          . Its uploaded values were applied there; all work happens on that
+          claim.
+        </p>
+      )}
 
       <div className="grid grid-cols-[minmax(0,2fr)_minmax(280px,1fr)] items-start gap-3 max-[1100px]:grid-cols-1">
         <div className="grid gap-3">
@@ -165,14 +181,7 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function ReviewBanner({
-  claim,
-  onDone,
-}: {
-  claim: ClaimDetail;
-  onDone: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
+function ReviewBanner({ claim }: { claim: ClaimDetail }) {
   return (
     <div
       role="status"
@@ -180,19 +189,13 @@ function ReviewBanner({
     >
       <AlertTriangle size={16} aria-hidden />
       <p className="min-w-0 flex-1">{claim.review_reason}</p>
-      {claim.can_work && (
-        <Button
-          disabled={busy}
-          onClick={() => {
-            setBusy(true);
-            void api(`/claims/${claim.id}`, {
-              method: "PATCH",
-              body: { needs_review: false },
-            }).finally(onDone);
-          }}
+      {claim.can_review && (
+        <Link
+          href={`/review/${claim.id}`}
+          className="rounded-[7px] border border-warn bg-white px-3 py-1.5 font-semibold text-warn-ink"
         >
-          Mark as reviewed
-        </Button>
+          Review it
+        </Link>
       )}
     </div>
   );
@@ -499,8 +502,18 @@ const HISTORY_LABELS: Record<string, string> = {
   "claim.note_added": "Note added",
   "claim.eob_attached": "EOB attached",
   "claim.eob_downloaded": "EOB opened",
-  "claim.reviewed": "Marked as reviewed",
+  "claim.reviewed": "Kept as a separate claim",
+  "claim.merged": "Merged into another claim",
+  "claim.updated_from_upload": "Updated from a newer line",
 };
+
+// Actions whose before/after values are worth listing, and bookkeeping keys that are not.
+const DETAILED = new Set([
+  "claim.updated",
+  "claim.assigned",
+  "claim.updated_from_upload",
+]);
+const HIDDEN_KEYS = new Set(["bulk", "from_line", "note_id", "characters"]);
 
 function HistoryPanel({
   events,
@@ -509,11 +522,13 @@ function HistoryPanel({
   events: AuditEvent[] | null;
   assignees: Assignee[];
 }) {
-  const names = new Map(assignees.map((a) => [a.id, a.name]));
-  const show = (key: string, value: unknown) => {
+  const known = new Map(assignees.map((a) => [a.id, a.name]));
+  const show = (event: AuditEvent, key: string, value: unknown) => {
     if (value === null || value === undefined || value === "") return "empty";
-    if (key === "assigned_user_id")
-      return names.get(String(value)) ?? "another person";
+    if (key === "assigned_user_id") {
+      const id = String(value);
+      return event.people?.[id] ?? known.get(id) ?? "another person";
+    }
     return String(value);
   };
   return (
@@ -527,14 +542,20 @@ function HistoryPanel({
               <p className="font-semibold">
                 {HISTORY_LABELS[e.action] ?? e.action}
               </p>
-              {(e.action === "claim.updated" ||
-                e.action === "claim.assigned") &&
-                Object.keys(e.after ?? {}).map((k) => (
-                  <p key={k} className="text-[11px]">
-                    {k.replace(/_user_id$/, "").replace(/_/g, " ")}:{" "}
-                    {show(k, e.before?.[k])} → {show(k, e.after?.[k])}
-                  </p>
-                ))}
+              {e.note && (
+                <p className="my-0.5 border-l-2 border-line pl-2 text-[11px] whitespace-pre-wrap">
+                  {e.note}
+                </p>
+              )}
+              {DETAILED.has(e.action) &&
+                Object.keys(e.after ?? {})
+                  .filter((k) => !HIDDEN_KEYS.has(k))
+                  .map((k) => (
+                    <p key={k} className="text-[11px]">
+                      {k.replace(/_user_id$/, "").replace(/_/g, " ")}:{" "}
+                      {show(e, k, e.before?.[k])} → {show(e, k, e.after?.[k])}
+                    </p>
+                  ))}
               <p className="text-[10px] text-muted">
                 {e.actor?.name ?? "System"} · {formatDateTime(e.occurred_at)}
               </p>

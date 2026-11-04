@@ -141,6 +141,15 @@ export type AuditEvent = {
   entity_id: string;
   before: Record<string, unknown> | null;
   after: Record<string, unknown> | null;
+  /** Names of people referred to in before/after, e.g. who a claim was assigned to. */
+  people?: Record<string, string>;
+  /** The record in words, and where it lives in the portal, e.g. "CLM-000123". */
+  label?: string | null;
+  link?: string | null;
+  /** For "Note added": the note's text, when the reader may see that claim. */
+  note?: string | null;
+  /** Plain-language lines, e.g. which permissions were added or removed. */
+  summary?: string[] | null;
 };
 export type AuditPage = { events: AuditEvent[]; next_before_id: number | null };
 
@@ -162,6 +171,7 @@ export type ClaimListItem = {
   aging_days: number;
   aging_bucket: string;
   needs_review: boolean;
+  merged_into: { id: string; number: string } | null;
 };
 export type ClaimPage = { claims: ClaimListItem[]; total: number };
 
@@ -188,6 +198,7 @@ export type ClaimDetail = ClaimListItem & {
   review_reason: string | null;
   notes: ClaimNote[];
   can_work: boolean;
+  can_review: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -229,3 +240,14 @@ export type Upload = {
 export type UploadDetail = Upload & {
   errors: { row_number: number; column: string; message: string }[];
 };
+
+export type AppNotification = {
+  id: number;
+  kind: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  created_at: string;
+  read: boolean;
+};
+export type NotificationPage = { items: AppNotification[]; unread: number };

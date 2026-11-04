@@ -14,6 +14,7 @@ EXPECTED_TABLES = {
     "audit_events",
     "claim_notes",
     "claims",
+    "notifications",
     "option_list_items",
     "permissions",
     "practices",

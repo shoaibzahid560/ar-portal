@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.context import Ctx
+from app.modules.notifications import service as notify
 from app.modules.roles.models import Permission, Role, RolePermission
 from app.modules.roles.schemas import PermissionOut, RoleOut, RolesResponse
 
@@ -64,6 +65,16 @@ async def set_permissions(ctx: Ctx, role_key: str, keys: list[str]) -> RolesResp
             actor_user_id=ctx.user.id,
             before={"permissions": sorted(current)},
             after={"permissions": sorted(wanted)},
+        )
+        added, removed = len(wanted - current), len(current - wanted)
+        notify.send(
+            ctx.db,
+            await notify.oversight(ctx.db),
+            kind="role.permissions_changed",
+            title=f"{ctx.user.full_name} changed the {role.name} permissions",
+            body=f"{added} added, {removed} removed",
+            link="/admin/settings?view=roles",
+            actor=ctx.user.id,
         )
         await ctx.db.commit()
     return await matrix(ctx.db)

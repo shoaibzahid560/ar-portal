@@ -8,6 +8,7 @@ import { useAuth } from "./auth";
 const SOURCES: Record<string, { path: string; permission: string }> = {
   claims: { path: "/claims/counts", permission: "claims.view" },
   followups: { path: "/claims/counts", permission: "claims.view" },
+  review: { path: "/claims/counts", permission: "claims.review" },
   uploads: { path: "/uploads/counts", permission: "uploads.view" },
 };
 

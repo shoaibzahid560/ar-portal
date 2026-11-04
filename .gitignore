@@ -12,8 +12,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .ruff_cache/
+
+# Uploaded files during local development
+.storage/
 .mypy_cache/
-*.egg-info/
 
 # Environment files: real values never go into Git
 .env

@@ -209,7 +209,11 @@ function NewUploadDialog({
       <fieldset disabled={busy} className="grid gap-3">
         <Field
           label="Practice"
-          hint="You can choose from the practices assigned to you."
+          hint={
+            practices.data && practices.data.length === 0
+              ? "No active practices are available to you. Add one under Practices, set a paused one back to Active, or ask an administrator to assign you a practice."
+              : "You can choose from the active practices assigned to you."
+          }
         >
           <select
             className={cn(selectClass, "w-full")}

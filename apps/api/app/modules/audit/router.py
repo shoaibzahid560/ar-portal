@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 
 from app.core.context import Ctx, require
+from app.modules.audit.enrich import enrich
 from app.modules.audit.models import AuditEvent
-from app.modules.audit.schemas import Actor, AuditEventOut, AuditPage
+from app.modules.audit.schemas import AuditPage
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/audit-events", tags=["audit"])
@@ -57,17 +58,5 @@ async def list_audit_events(
         statement = statement.where(AuditEvent.id < before_id)
 
     rows = (await ctx.db.execute(statement.order_by(AuditEvent.id.desc()).limit(limit + 1))).all()
-    events = [
-        AuditEventOut(
-            id=event.id,
-            occurred_at=event.occurred_at,
-            actor=Actor(id=user.id, name=user.full_name, email=user.email) if user else None,
-            action=event.action,
-            entity_type=event.entity_type,
-            entity_id=event.entity_id,
-            before=event.before,
-            after=event.after,
-        )
-        for event, user in rows[:limit]
-    ]
+    events = await enrich(ctx, rows[:limit])
     return AuditPage(events=events, next_before_id=events[-1].id if len(rows) > limit else None)

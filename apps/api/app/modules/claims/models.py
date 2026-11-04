@@ -38,6 +38,9 @@ class Claim(Timestamps, Base):
     fingerprint: Mapped[str] = mapped_column(Text)
     needs_review: Mapped[bool] = mapped_column(Boolean, server_default="false")
     review_reason: Mapped[str | None] = mapped_column(Text)
+    # Set when a reviewer decides this line is the same claim as an earlier one. The line is kept (so the
+    # same line in a later upload is still recognised) but leaves every list; the earlier claim carries on.
+    merged_into_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("claims.id"), index=True)
 
     # From the upload
     patient_name: Mapped[str] = mapped_column(Text)

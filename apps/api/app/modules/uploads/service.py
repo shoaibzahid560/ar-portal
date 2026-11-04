@@ -27,6 +27,7 @@ from app.core.scope import Scope, get_scope
 from app.core.storage import get_storage
 from app.modules.claims.models import Claim
 from app.modules.claims.schemas import claim_label
+from app.modules.notifications import service as notify
 from app.modules.practices.models import Practice
 from app.modules.uploads.models import Upload, UploadError
 from app.modules.uploads.parser import ParsedRow, SheetError, parse_sheet
@@ -180,6 +181,15 @@ async def create_upload(ctx: Ctx, practice_id: uuid.UUID, file_name: str, data: 
             practice_id=practice_id,
             after={"file_name": name, "reason": str(error)},
         )
+        label = upload_label(upload.number)
+        notify.send(
+            ctx.db,
+            {ctx.user.id} | await notify.oversight(ctx.db),
+            kind="upload.failed",
+            title=f"{label} for {practice.name} failed",
+            body=str(error),
+            link=f"/uploads/{upload.id}",
+        )
         await ctx.db.commit()
         await ctx.db.refresh(upload)
         return await detail(ctx, upload)
@@ -209,9 +219,46 @@ async def create_upload(ctx: Ctx, practice_id: uuid.UUID, file_name: str, data: 
             "review_rows": upload.review_rows,
         },
     )
+    await _notify_completed(ctx, upload, practice.name)
     await ctx.db.commit()
     await ctx.db.refresh(upload)
     return await detail(ctx, upload)
+
+
+async def _notify_completed(ctx: Ctx, upload: Upload, practice_name: str) -> None:
+    label, link = upload_label(upload.number), f"/uploads/{upload.id}"
+    summary = (
+        f"{upload.created_claims} new, {upload.duplicate_rows} already in the system, "
+        f"{upload.error_rows} with errors, {upload.review_rows} need review"
+    )
+    notify.send(
+        ctx.db,
+        await notify.oversight(ctx.db),
+        kind="upload.completed",
+        title=f"{label} uploaded for {practice_name}",
+        body=summary,
+        link=link,
+        actor=ctx.user.id,
+    )
+    if upload.error_rows:
+        # The uploader is told even though they made the upload: this is something they need to fix.
+        notify.send(
+            ctx.db,
+            {ctx.user.id},
+            kind="upload.errors",
+            title=f"{label}: {upload.error_rows} row(s) with errors",
+            body="Download the error report, fix the rows and upload them again.",
+            link=link,
+        )
+    if upload.review_rows:
+        notify.send(
+            ctx.db,
+            await notify.practice_reviewers(ctx.db, upload.practice_id) | {ctx.user.id},
+            kind="review.waiting",
+            title=f"{upload.review_rows} line(s) from {label} need review",
+            body=f"{practice_name}: possible changes to claims already in the system.",
+            link="/review?view=open",
+        )
 
 
 async def _create_claims(ctx: Ctx, upload: Upload, rows: list[ParsedRow]) -> None:

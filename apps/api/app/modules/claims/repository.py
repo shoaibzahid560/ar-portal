@@ -27,6 +27,11 @@ def visible(statement: Select, ctx: Ctx, scope: Scope) -> Select:
     return statement.where(Claim.practice_id.in_(scope.practice_ids))
 
 
+def active(statement: Select) -> Select:
+    """Leaves out lines merged into an earlier claim. Every list, count and total uses this."""
+    return statement.where(Claim.merged_into_id.is_(None))
+
+
 def apply_view(statement: Select, view: str, ctx: Ctx, today: date) -> Select:
     match view:
         case "mine":
@@ -41,6 +46,8 @@ def apply_view(statement: Select, view: str, ctx: Ctx, today: date) -> Select:
             return statement.where(Claim.followup_date < today)
         case "needs-review":
             return statement.where(Claim.needs_review.is_(True))
+        case "merged":
+            return statement.where(Claim.merged_into_id.is_not(None))
         case _:
             return statement
 
@@ -118,3 +125,35 @@ async def assignees(db: AsyncSession, practice_id: uuid.UUID) -> list[tuple[uuid
         .order_by(User.full_name)
     )
     return [tuple(row) for row in rows]
+
+
+async def numbers(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, int]:
+    if not ids:
+        return {}
+    return dict((await db.execute(select(Claim.id, Claim.number).where(Claim.id.in_(ids)))).all())
+
+
+async def same_visit(db: AsyncSession, claim: Claim) -> list[Claim]:
+    """Other claims of the same practice for the same patient, subscriber ID and service date."""
+    rows = await db.scalars(
+        select(Claim)
+        .where(
+            Claim.practice_id == claim.practice_id,
+            Claim.service_date == claim.service_date,
+            Claim.subscriber_id == claim.subscriber_id,
+            Claim.id != claim.id,
+            Claim.merged_into_id.is_(None),
+        )
+        .order_by(Claim.number)
+    )
+    name = " ".join(claim.patient_name.lower().split())
+    return [c for c in rows if " ".join(c.patient_name.lower().split()) == name]
+
+
+async def assignees_all(db: AsyncSession, practice_ids: set[uuid.UUID]) -> list[tuple[uuid.UUID, str, str]]:
+    """People who are active AR staff of every one of these practices."""
+    common: list[tuple[uuid.UUID, str, str]] | None = None
+    for practice_id in practice_ids:
+        people = await assignees(db, practice_id)
+        common = people if common is None else [p for p in common if p in people]
+    return common or []

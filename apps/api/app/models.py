@@ -5,6 +5,7 @@ from app.modules.audit.models import AuditEvent
 from app.modules.auth.models import UserSession
 from app.modules.claims.models import Claim, ClaimNote
 from app.modules.lists.models import OptionListItem
+from app.modules.notifications.models import Notification
 from app.modules.practices.models import Practice, Team, TeamMember, UserPractice
 from app.modules.roles.models import Permission, Role, RolePermission
 from app.modules.uploads.models import Upload, UploadError
@@ -15,6 +16,7 @@ __all__ = [
     "Base",
     "Claim",
     "ClaimNote",
+    "Notification",
     "OptionListItem",
     "Permission",
     "Practice",

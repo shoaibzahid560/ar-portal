@@ -8,6 +8,7 @@ from app.core import audit
 from app.core.context import Ctx
 from app.core.schemas import RoleRef
 from app.core.scope import Scope, get_scope, require_within_scope
+from app.modules.notifications import service as notify
 from app.modules.users import repository
 from app.modules.users.models import User
 from app.modules.users.schemas import UserCreate, UserOut, UserUpdate
@@ -105,6 +106,14 @@ async def create_user(ctx: Ctx, body: UserCreate) -> UserOut:
             "team_ids": sorted(map(str, team_ids)),
         },
     )
+    notify.send(
+        ctx.db,
+        await notify.oversight(ctx.db),
+        kind="user.created",
+        title=f"{ctx.user.full_name} added {user.full_name} as {role.name}",
+        link="/admin/users",
+        actor=ctx.user.id,
+    )
     await ctx.db.commit()
     await ctx.db.refresh(user)
     return (await to_out(ctx, [user]))[0]
@@ -164,9 +173,27 @@ async def update_user(ctx: Ctx, user_id: uuid.UUID, body: UserUpdate) -> UserOut
             before=before,
             after=after,
         )
+        if "role" in after or "status" in after:
+            what = []
+            if "role" in after:
+                what.append(f"role to {roles_by_key_name(roles, after['role'])}")
+            if "status" in after:
+                what.append(f"status to {after['status']}")
+            notify.send(
+                ctx.db,
+                await notify.oversight(ctx.db),
+                kind="user.changed",
+                title=f"{ctx.user.full_name} changed {user.full_name}'s {' and '.join(what)}",
+                link="/admin/users",
+                actor=ctx.user.id,
+            )
     await ctx.db.commit()
     await ctx.db.refresh(user)
     return (await to_out(ctx, [user]))[0]
+
+
+def roles_by_key_name(roles: dict, key: object) -> str:
+    return next((r.name for r in roles.values() if r.key == key), str(key))
 
 
 async def deactivate_user(ctx: Ctx, user_id: uuid.UUID) -> UserOut:
@@ -187,6 +214,14 @@ async def deactivate_user(ctx: Ctx, user_id: uuid.UUID) -> UserOut:
         )
         user.status = "deactivated"
         await repository.revoke_all_sessions(ctx.db, user.id)
+        notify.send(
+            ctx.db,
+            await notify.oversight(ctx.db),
+            kind="user.deactivated",
+            title=f"{ctx.user.full_name} deactivated {user.full_name}",
+            link="/admin/users?view=deactivated",
+            actor=ctx.user.id,
+        )
         await ctx.db.commit()
         await ctx.db.refresh(user)
     return (await to_out(ctx, [user]))[0]
