@@ -915,7 +915,11 @@ async def reverse(ctx: Ctx, upload_id: uuid.UUID, reason: str | None) -> UploadD
             select(ClaimNote.claim_id).where(ClaimNote.claim_id.in_([c.id for c in created]))
         )
     )
-    worked = [c for c in created if c.id in noted or any(getattr(c, f) is not None for f in WORK_FIELDS)]
+    worked = [
+        c
+        for c in created
+        if c.id in noted or c.work_state != "open" or any(getattr(c, f) is not None for f in WORK_FIELDS)
+    ]
     if worked:
         numbers = ", ".join(claim_label(c.number) for c in worked[:10])
         more = f" and {len(worked) - 10} more" if len(worked) > 10 else ""

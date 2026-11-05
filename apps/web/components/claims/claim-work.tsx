@@ -4,6 +4,7 @@ import { AlertTriangle, FileText } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
+import { LifecyclePanel } from "@/components/claims/lifecycle-panel";
 import { EmptyState } from "@/components/data/empty-state";
 import { Panel } from "@/components/data/panel";
 import { StatusPill } from "@/components/data/status-pill";
@@ -25,7 +26,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
-import { claimStatusTone } from "@/lib/status";
+import { claimStatusTone, PRIORITIES, WORK_STATES } from "@/lib/status";
 import { useApi } from "@/lib/use-api";
 
 /** The AR sheet's work columns, in the sheet's order. */
@@ -161,6 +162,7 @@ export function ClaimWork() {
             </dl>
           </Panel>
 
+          <LifecyclePanel claim={c} onSaved={refresh} />
           <WorkForm
             key={c.updated_at}
             claim={c}
@@ -288,7 +290,13 @@ function WorkForm({
       title="Work on this claim"
       action={
         readOnly ? (
-          <span className="text-muted">View only</span>
+          <span className="text-muted">
+            {claim.work_state === "closed"
+              ? "Closed: reopen to change"
+              : claim.work_state === "pending_completion"
+                ? "Locked while awaiting completion"
+                : "View only"}
+          </span>
         ) : !canWork ? (
           <span className="text-muted">You can change the assignment only</span>
         ) : null
@@ -487,7 +495,7 @@ function NotesPanel({
 
   return (
     <Panel title={`Notes (${claim.notes.length})`}>
-      {claim.can_work && (
+      {claim.can_note && (
         <div className="mb-3">
           <textarea
             value={body}
@@ -535,6 +543,12 @@ const HISTORY_LABELS: Record<string, string> = {
   "claim.merged": "Merged into another claim",
   "claim.updated_from_upload": "Updated from a newer line",
   "claim.withdrawn": "Withdrawn (its upload was reversed)",
+  "claim.completion_requested": "Marked complete",
+  "claim.closed": "Closed",
+  "claim.returned": "Returned for correction",
+  "claim.continued": "Sent back to continue follow-up",
+  "claim.reopened": "Reopened",
+  "claim.prioritized": "Priority changed",
   "claim.update_reversed": "Update undone (its upload was reversed)",
 };
 
@@ -544,6 +558,12 @@ const DETAILED = new Set([
   "claim.assigned",
   "claim.updated_from_upload",
   "claim.update_reversed",
+  "claim.completion_requested",
+  "claim.closed",
+  "claim.returned",
+  "claim.continued",
+  "claim.reopened",
+  "claim.prioritized",
 ]);
 const HIDDEN_KEYS = new Set([
   "bulk",
@@ -552,6 +572,7 @@ const HIDDEN_KEYS = new Set([
   "characters",
   "from_upload",
   "upload",
+  "approved_completion",
 ]);
 
 function HistoryPanel({
@@ -568,6 +589,10 @@ function HistoryPanel({
       const id = String(value);
       return event.people?.[id] ?? known.get(id) ?? "another person";
     }
+    if (key === "work_state" && String(value) in WORK_STATES)
+      return WORK_STATES[String(value) as keyof typeof WORK_STATES].label;
+    if (key === "priority" && String(value) in PRIORITIES)
+      return PRIORITIES[String(value) as keyof typeof PRIORITIES].label;
     return String(value);
   };
   return (
@@ -592,7 +617,9 @@ function HistoryPanel({
                   .map((k) => (
                     <p key={k} className="text-[11px]">
                       {k.replace(/_user_id$/, "").replace(/_/g, " ")}:{" "}
-                      {show(e, k, e.before?.[k])} → {show(e, k, e.after?.[k])}
+                      {e.before && k in e.before
+                        ? `${show(e, k, e.before[k])} → ${show(e, k, e.after?.[k])}`
+                        : show(e, k, e.after?.[k])}
                     </p>
                   ))}
               <p className="text-[10px] text-muted">

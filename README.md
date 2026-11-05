@@ -13,7 +13,7 @@ ar-portal/                Open this folder in VS Code; Git lives here
     ├── web/              Next.js app (npm commands run here)
     └── api/              FastAPI app (Python commands run here)
         ├── app/          The API, one folder per module
-        ├── migrations/   Database changes (Alembic): 0001 foundation ... 0007 import approval
+        ├── migrations/   Database changes (Alembic): 0001 foundation ... 0008 claim lifecycle
         └── tests/        Unit tests, and database tests that run in CI
 ```
 
@@ -29,7 +29,8 @@ ar-portal/                Open this folder in VS Code; Git lives here
 | Phase B: additional grants (reason, approver, expiry, second-person approval and 90-day review for elevated grants) | Done |
 | Phase E: refused actions and error-report downloads in the audit log | Done |
 | Phase C: import preview and approval (preview, line decisions, second-person commit, turn down, discard, reverse, file-name check) | Done |
-| Phase D: claim lifecycle (close and reopen, priority, approving completion) | Next |
+| Phase D: claim lifecycle (mark complete, approve and close, return for correction, continue follow-up, close and reopen, priority) | Done |
+| M6: reports and exports (then client reporting) | Next |
 | M6 reports and exports | Next |
 | Staging and production deploy (Vercel, Supabase) | Needs a company Google account and Vercel Pro |
 

@@ -16,12 +16,15 @@ from app.modules.claims.models import Claim
 from app.modules.claims.schemas import (
     Assignee,
     BulkAssign,
+    BulkPriority,
     BulkResult,
     ClaimDetail,
     ClaimPage,
     ClaimSummary,
     ClaimUpdate,
     ClaimView,
+    ContinueFollowUp,
+    LifecycleNote,
     NoteCreate,
     Resolve,
     StatusCount,
@@ -33,8 +36,12 @@ router = APIRouter(prefix="/claims", tags=["claims"])
 CanView = Annotated[Ctx, Depends(require("claims.view", "claims.view_team", "claims.view_practice"))]
 CanWork = Annotated[Ctx, Depends(require("claims.work"))]
 CanAssign = Annotated[Ctx, Depends(require("claims.assign"))]
+CanClose = Annotated[Ctx, Depends(require("claims.close"))]
+CanPrioritize = Annotated[Ctx, Depends(require("claims.prioritize"))]
 # Changing a claim covers work fields, assignment and the review flag; each is checked per practice.
-CanChange = Annotated[Ctx, Depends(require("claims.work", "claims.assign", "claims.review"))]
+CanChange = Annotated[
+    Ctx, Depends(require("claims.work", "claims.assign", "claims.review", "claims.prioritize"))
+]
 CanReview = Annotated[Ctx, Depends(require("claims.review"))]
 VIEWS: tuple[ClaimView, ...] = (
     "all",
@@ -87,24 +94,29 @@ async def claim_counts(ctx: CanView) -> dict[str, int]:
 
 @router.get("/summary", response_model=ClaimSummary)
 async def claim_summary(ctx: CanView) -> ClaimSummary:
-    """Numbers for the dashboard, within the caller's scope."""
+    """Numbers for the dashboard, within the caller's scope. Totals count open work (not closed claims)."""
     visible = repository.active(repository.visible(select(Claim), ctx)).subquery()
     today = business_today()
+    open_ = visible.c.work_state != "closed"
     totals = (
         await ctx.db.execute(
             select(
-                func.count(),
-                func.count().filter(visible.c.assigned_user_id.is_(None)),
-                func.count().filter(visible.c.followup_date == today),
-                func.count().filter(visible.c.followup_date < today),
-                func.count().filter(visible.c.needs_review.is_(True)),
-                func.coalesce(func.sum(visible.c.billed), 0),
+                func.count().filter(open_),
+                func.count().filter(open_, visible.c.assigned_user_id.is_(None)),
+                func.count().filter(open_, visible.c.followup_date == today),
+                func.count().filter(open_, visible.c.followup_date < today),
+                func.count().filter(open_, visible.c.needs_review.is_(True)),
+                func.coalesce(func.sum(visible.c.billed).filter(open_), 0),
+                func.count().filter(visible.c.work_state == "pending_completion"),
+                func.count().filter(visible.c.work_state == "open", visible.c.returned.is_(True)),
+                func.count().filter(visible.c.work_state == "closed"),
             )
         )
     ).one()
     status_label = case((visible.c.claim_status.is_(None), "No status yet"), else_=visible.c.claim_status)
     rows = await ctx.db.execute(
         select(status_label, func.count(), func.coalesce(func.sum(visible.c.billed), 0))
+        .where(open_)
         .group_by(status_label)
         .order_by(func.count().desc())
     )
@@ -115,6 +127,9 @@ async def claim_summary(ctx: CanView) -> ClaimSummary:
         overdue=totals[3],
         needs_review=totals[4],
         billed_total=Decimal(totals[5]),
+        awaiting_completion=totals[6],
+        returned=totals[7],
+        closed=totals[8],
         by_status=[StatusCount(status=s, count=c, billed=Decimal(b)) for s, c, b in rows],
     )
 
@@ -132,6 +147,12 @@ async def assignees_for_practices(
 async def bulk_assign(ctx: CanAssign, body: BulkAssign) -> BulkResult:
     """Assign (or unassign) up to 500 claims at once. Each claim's history records the change."""
     return BulkResult(updated=await service.bulk_assign(ctx, body.claim_ids, body.assigned_user_id))
+
+
+@router.post("/bulk-priority", response_model=BulkResult)
+async def bulk_priority(ctx: CanPrioritize, body: BulkPriority) -> BulkResult:
+    """Set the priority of up to 500 open claims at once."""
+    return BulkResult(updated=await service.bulk_priority(ctx, body.claim_ids, body.priority))
 
 
 @router.get("/{claim_id}", response_model=ClaimDetail)
@@ -204,3 +225,42 @@ async def resolve(ctx: CanReview, claim_id: uuid.UUID, body: Resolve) -> ClaimDe
     """Same claim: the earlier claim takes this line's uploaded values and the line is merged into it.
     Separate claim: both stay. Returns the claim that carries on."""
     return await service.resolve(ctx, claim_id, body.decision, body.target_id)
+
+
+# ---- Lifecycle ------------------------------------------------------------------------------------------
+
+
+@router.post("/{claim_id}/request-completion", response_model=ClaimDetail)
+async def request_completion(ctx: CanWork, claim_id: uuid.UUID, body: LifecycleNote) -> ClaimDetail:
+    """Mark the work complete. The claim locks until a reviewer approves, returns or continues it."""
+    return await service.request_completion(ctx, claim_id, body.reason)
+
+
+@router.post("/{claim_id}/approve-completion", response_model=ClaimDetail)
+async def approve_completion(ctx: CanClose, claim_id: uuid.UUID, body: LifecycleNote) -> ClaimDetail:
+    """Close a claim someone else marked complete."""
+    return await service.approve_completion(ctx, claim_id, body.reason)
+
+
+@router.post("/{claim_id}/return", response_model=ClaimDetail)
+async def return_for_correction(ctx: CanClose, claim_id: uuid.UUID, body: LifecycleNote) -> ClaimDetail:
+    """Send the claim back to the person working it, with the reason. A reason is required."""
+    return await service.return_for_correction(ctx, claim_id, body.reason)
+
+
+@router.post("/{claim_id}/continue", response_model=ClaimDetail)
+async def continue_followup(ctx: CanClose, claim_id: uuid.UUID, body: ContinueFollowUp) -> ClaimDetail:
+    """Not finished yet: back to open with a new follow-up date."""
+    return await service.continue_followup(ctx, claim_id, body.reason, body.followup_date)
+
+
+@router.post("/{claim_id}/close", response_model=ClaimDetail)
+async def close(ctx: CanClose, claim_id: uuid.UUID, body: LifecycleNote) -> ClaimDetail:
+    """Close an open claim directly (for example, found already paid). A reason is required."""
+    return await service.close(ctx, claim_id, body.reason)
+
+
+@router.post("/{claim_id}/reopen", response_model=ClaimDetail)
+async def reopen(ctx: CanClose, claim_id: uuid.UUID, body: LifecycleNote) -> ClaimDetail:
+    """Reopen a closed claim. A reason is required."""
+    return await service.reopen(ctx, claim_id, body.reason)

@@ -2,7 +2,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import date, timedelta
 
-from sqlalchemy import Select, and_, false, func, or_, select
+from sqlalchemy import Select, and_, case, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.access import users_with
@@ -55,6 +55,10 @@ def active(statement: Select) -> Select:
 
 
 def apply_view(statement: Select, view: str, ctx: Ctx, today: date) -> Select:
+    """Closed claims appear only in the Closed view; every other view is about work still to do."""
+    if view == "closed":
+        return statement.where(Claim.work_state == "closed")
+    statement = statement.where(Claim.work_state != "closed")
     match view:
         case "mine":
             return statement.where(Claim.assigned_user_id == ctx.user.id)
@@ -70,8 +74,20 @@ def apply_view(statement: Select, view: str, ctx: Ctx, today: date) -> Select:
             return statement.where(Claim.needs_review.is_(True))
         case "merged":
             return statement.where(Claim.merged_into_id.is_not(None))
+        case "awaiting-completion":
+            return statement.where(Claim.work_state == "pending_completion")
+        case "returned":
+            return statement.where(Claim.returned.is_(True), Claim.work_state == "open")
+        case "high-priority":
+            return statement.where(Claim.priority.in_(("high", "urgent")))
         case _:
             return statement
+
+
+# Urgent first, then high, normal, low.
+PRIORITY_ORDER = case(
+    (Claim.priority == "urgent", 0), (Claim.priority == "high", 1), (Claim.priority == "normal", 2), else_=3
+)
 
 
 def apply_filters(
@@ -109,7 +125,7 @@ async def page(
 ) -> tuple[Sequence[Claim], int]:
     total = await db.scalar(select(func.count()).select_from(statement.subquery()))
     claims = await db.scalars(
-        statement.order_by(Claim.service_date, Claim.number).limit(limit).offset(offset)
+        statement.order_by(PRIORITY_ORDER, Claim.service_date, Claim.number).limit(limit).offset(offset)
     )
     return claims.all(), total or 0
 

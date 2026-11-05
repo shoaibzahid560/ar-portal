@@ -118,7 +118,11 @@ export const NAV_MODULES: NavModule[] = [
       { slug: "unassigned", label: "Unassigned" },
       { slug: "due-today", label: "Follow-up Due" },
       { slug: "overdue", label: "Overdue" },
+      { slug: "high-priority", label: "High Priority" },
+      { slug: "awaiting-completion", label: "Awaiting Completion" },
+      { slug: "returned", label: "Returned" },
       { slug: "needs-review", label: "Needs Review" },
+      { slug: "closed", label: "Closed" },
     ],
   },
   {

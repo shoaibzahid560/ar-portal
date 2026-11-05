@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -20,6 +21,10 @@ from app.core.orm import Base, CreatedAt, Timestamps
 
 Money = Numeric(12, 2)
 
+# Where the work on a claim stands (separate from the payer-facing Claim Status dropdown).
+WORK_STATES = ("open", "pending_completion", "closed")
+PRIORITIES = ("low", "normal", "high", "urgent")
+
 
 class Claim(Timestamps, Base):
     """
@@ -28,7 +33,11 @@ class Claim(Timestamps, Base):
     """
 
     __tablename__ = "claims"
-    __table_args__ = (UniqueConstraint("practice_id", "fingerprint"),)
+    __table_args__ = (
+        UniqueConstraint("practice_id", "fingerprint"),
+        CheckConstraint(f"work_state IN {WORK_STATES}", name="work_state_valid"),
+        CheckConstraint(f"priority IN {PRIORITIES}", name="priority_valid"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
     number: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True)
@@ -43,6 +52,16 @@ class Claim(Timestamps, Base):
     merged_into_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("claims.id"), index=True)
     # Set when the upload that created this claim was reversed. The claim leaves every list but is kept.
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Lifecycle: open -> pending_completion (marked complete) -> closed, or back to open (returned or
+    # continued). The latest step is recorded here; every step is in the audit log.
+    work_state: Mapped[str] = mapped_column(Text, server_default="open", index=True)
+    priority: Mapped[str] = mapped_column(Text, server_default="normal")
+    returned: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    completion_requested_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    state_changed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    state_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    state_reason: Mapped[str | None] = mapped_column(Text)
 
     # From the upload
     patient_name: Mapped[str] = mapped_column(Text)

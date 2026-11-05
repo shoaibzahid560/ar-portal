@@ -61,7 +61,13 @@ async def create_followup_reminders(db: AsyncSession, user_id: uuid.UUID, today:
             func.concat(number, wording),
             func.concat("/claims/", func.cast(Claim.id, Text())),
             func.concat(kind, ":", func.cast(Claim.id, Text()), ":", func.cast(Claim.followup_date, Text())),
-        ).where(Claim.assigned_user_id == user_id, Claim.merged_into_id.is_(None), condition)
+        ).where(
+            Claim.assigned_user_id == user_id,
+            Claim.merged_into_id.is_(None),
+            Claim.withdrawn_at.is_(None),
+            Claim.work_state == "open",  # nothing to follow up once marked complete or closed
+            condition,
+        )
         statement = (
             insert(Notification)
             .from_select(["recipient_user_id", "kind", "title", "link", "dedupe_key"], source)

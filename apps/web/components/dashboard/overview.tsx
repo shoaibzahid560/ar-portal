@@ -67,6 +67,28 @@ export function DashboardOverview() {
           meta="Follow-Up Date has passed"
         />
       </section>
+      {s &&
+        s.awaiting_completion > 0 &&
+        permissions.includes("claims.close") && (
+          <p className="mb-3 rounded-[9px] bg-info-soft px-3 py-2.5 text-[12px]">
+            {s.awaiting_completion} claim(s) marked complete and waiting for
+            your review.{" "}
+            <Link
+              href="/claims?view=awaiting-completion"
+              className="font-bold text-brand underline"
+            >
+              Review them
+            </Link>
+          </p>
+        )}
+      {s && s.returned > 0 && !permissions.includes("claims.close") && (
+        <p className="mb-3 rounded-[9px] bg-danger-soft px-3 py-2.5 text-[12px] text-danger-ink">
+          {s.returned} claim(s) returned for correction.{" "}
+          <Link href="/claims?view=returned" className="font-bold underline">
+            See them
+          </Link>
+        </p>
+      )}
       {s && s.needs_review > 0 && (
         <p className="mb-3 rounded-[9px] bg-warn-soft px-3 py-2.5 text-[12px] text-warn-ink">
           {s.needs_review} claim(s) need review: they may be changed lines of

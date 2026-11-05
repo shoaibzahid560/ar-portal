@@ -177,6 +177,9 @@ export type ClaimListItem = {
   aging_bucket: string;
   needs_review: boolean;
   merged_into: { id: string; number: string } | null;
+  work_state: "open" | "pending_completion" | "closed";
+  priority: Priority;
+  returned: boolean;
 };
 export type ClaimPage = { claims: ClaimListItem[]; total: number };
 
@@ -206,6 +209,16 @@ export type ClaimDetail = ClaimListItem & {
   can_assign: boolean;
   can_review: boolean;
   withdrawn: boolean;
+  state_reason: string | null;
+  state_changed_by: { id: string; name: string } | null;
+  state_changed_at: string | null;
+  completion_requested_by: { id: string; name: string } | null;
+  can_note: boolean;
+  can_request_completion: boolean;
+  can_review_completion: boolean;
+  can_close: boolean;
+  can_reopen: boolean;
+  can_prioritize: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -219,6 +232,9 @@ export type ClaimSummary = {
   overdue: number;
   needs_review: number;
   billed_total: string;
+  awaiting_completion: number;
+  returned: number;
+  closed: number;
   by_status: { status: string; count: number; billed: string }[];
 };
 
@@ -340,3 +356,5 @@ export type GrantablePermission = {
   description: string;
   elevated: boolean;
 };
+
+export type Priority = "low" | "normal" | "high" | "urgent";

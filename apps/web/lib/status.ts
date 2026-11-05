@@ -35,3 +35,17 @@ export const UPLOAD_STATUSES = {
   reversed: { label: "Reversed", tone: "danger" },
   failed: { label: "Failed", tone: "danger" },
 } as const satisfies Record<string, { label: string; tone: Tone }>;
+
+/** Where the work on a claim stands (separate from the payer-facing Claim Status). */
+export const WORK_STATES = {
+  open: { label: "Open", tone: "info" },
+  pending_completion: { label: "Awaiting completion", tone: "warn" },
+  closed: { label: "Closed", tone: "neutral" },
+} as const satisfies Record<string, { label: string; tone: Tone }>;
+
+export const PRIORITIES = {
+  low: { label: "Low", tone: "neutral" },
+  normal: { label: "Normal", tone: "neutral" },
+  high: { label: "High", tone: "warn" },
+  urgent: { label: "Urgent", tone: "danger" },
+} as const satisfies Record<string, { label: string; tone: Tone }>;

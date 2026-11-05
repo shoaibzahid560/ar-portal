@@ -14,6 +14,7 @@ import {
   api,
   type Assignee,
   type ClaimListItem,
+  type Priority,
   type ClaimPage,
   type Lists,
 } from "@/lib/api";
@@ -21,7 +22,7 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { formatDate, formatMoney } from "@/lib/format";
 import { getModule, resolveView } from "@/lib/navigation";
-import { claimStatusTone } from "@/lib/status";
+import { claimStatusTone, PRIORITIES, WORK_STATES } from "@/lib/status";
 import { useApi } from "@/lib/use-api";
 
 const PAGE_SIZE = 100;
@@ -49,6 +50,9 @@ export function ClaimsTable({
   const lists = useApi<Lists>("/lists");
   const { permissions } = useAuth();
   const canAssign = permissions.includes("claims.assign");
+  const canPrioritize = permissions.includes("claims.prioritize");
+  // Rows can be selected for any bulk action the person may take.
+  const canSelect = canAssign || canPrioritize;
 
   const search = new URLSearchParams({
     view,
@@ -162,8 +166,10 @@ export function ClaimsTable({
           {notice}
         </p>
       )}
-      {canAssign && page && chosen.length > 0 && (
+      {canSelect && page && chosen.length > 0 && (
         <BulkAssignBar
+          canAssign={canAssign}
+          canPrioritize={canPrioritize}
           claims={page.claims.filter((c) => chosen.includes(c.id))}
           onClear={() => setSelected([])}
           onDone={(message) => {
@@ -191,7 +197,7 @@ export function ClaimsTable({
           <Table>
             <thead>
               <tr>
-                {canAssign && (
+                {canSelect && (
                   <Th className="w-8 pl-[15px]">
                     <input
                       type="checkbox"
@@ -206,7 +212,7 @@ export function ClaimsTable({
                     />
                   </Th>
                 )}
-                <Th className={canAssign ? "" : "pl-[15px]"}>Claim</Th>
+                <Th className={canSelect ? "" : "pl-[15px]"}>Claim</Th>
                 <Th>Patient</Th>
                 <Th>Practice</Th>
                 <Th>Insurance carrier</Th>
@@ -228,7 +234,7 @@ export function ClaimsTable({
                   )}
                   onClick={() => router.push(`/claims/${c.id}`)}
                 >
-                  {canAssign && (
+                  {canSelect && (
                     <Td
                       className="pl-[15px]"
                       onClick={(e) => e.stopPropagation()}
@@ -245,7 +251,7 @@ export function ClaimsTable({
                   <Td
                     className={cn(
                       "font-bold whitespace-nowrap",
-                      !canAssign && "pl-[15px]",
+                      !canSelect && "pl-[15px]",
                     )}
                   >
                     <Link
@@ -261,6 +267,14 @@ export function ClaimsTable({
                         className="ml-1 inline-flex align-[-2px] text-warn"
                       >
                         <AlertTriangle size={13} aria-label="Needs review" />
+                      </span>
+                    )}
+                    {(c.priority === "high" || c.priority === "urgent") && (
+                      <span className="ml-1.5">
+                        <StatusPill
+                          label={PRIORITIES[c.priority].label}
+                          tone={PRIORITIES[c.priority].tone}
+                        />
                       </span>
                     )}
                   </Td>
@@ -279,6 +293,19 @@ export function ClaimsTable({
                       label={c.claim_status ?? "No status"}
                       tone={claimStatusTone(c.claim_status)}
                     />
+                    {c.work_state !== "open" && (
+                      <span className="ml-1">
+                        <StatusPill
+                          label={WORK_STATES[c.work_state].label}
+                          tone={WORK_STATES[c.work_state].tone}
+                        />
+                      </span>
+                    )}
+                    {c.work_state === "open" && c.returned && (
+                      <span className="ml-1">
+                        <StatusPill label="Returned" tone="danger" />
+                      </span>
+                    )}
                   </Td>
                   <Td className="whitespace-nowrap">
                     {formatDate(c.followup_date)}
@@ -324,18 +351,43 @@ export function ClaimsTable({
 
 /** Shown while claims are ticked: assign them all to one person in a single step. */
 function BulkAssignBar({
+  canAssign,
+  canPrioritize,
   claims,
   onClear,
   onDone,
 }: {
+  canAssign: boolean;
+  canPrioritize: boolean;
   claims: ClaimListItem[];
   onClear: () => void;
   onDone: (message: string) => void;
 }) {
   const practiceIds = [...new Set(claims.map((c) => c.practice.id))].sort();
   const people = useApi<Assignee[]>(
-    `/claims/assignees?${practiceIds.map((id) => `practice_id=${id}`).join("&")}`,
+    canAssign
+      ? `/claims/assignees?${practiceIds.map((id) => `practice_id=${id}`).join("&")}`
+      : null,
   );
+  const [priority, setPriority] = useState("");
+
+  async function prioritize() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api<{ updated: number }>("/claims/bulk-priority", {
+        method: "POST",
+        body: { claim_ids: claims.map((c) => c.id), priority },
+      });
+      onDone(
+        `${result.updated} claim(s) set to ${PRIORITIES[priority as Priority].label} priority.`,
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not save.");
+    } finally {
+      setBusy(false);
+    }
+  }
   const [assignee, setAssignee] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -369,29 +421,58 @@ function BulkAssignBar({
     <div className="mb-3 rounded-[9px] border border-brand bg-brand-soft/40 px-3 py-2.5">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[12px] font-bold">{claims.length} selected</span>
-        <span className="text-[12px] text-muted">Assign to</span>
-        <select
-          value={assignee}
-          onChange={(e) => setAssignee(e.target.value)}
-          aria-label="Assign the selected claims to"
-          className={selectClass}
-          disabled={busy}
-        >
-          <option value="">Choose a person…</option>
-          {(people.data ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} ({p.role})
-            </option>
-          ))}
-          <option value="none">Nobody (unassign)</option>
-        </select>
-        <Button
-          variant="primary"
-          onClick={() => void assign()}
-          disabled={busy || !assignee}
-        >
-          {busy ? "Assigning…" : "Assign"}
-        </Button>
+        {canAssign && (
+          <>
+            <span className="text-[12px] text-muted">Assign to</span>
+            <select
+              value={assignee}
+              onChange={(e) => setAssignee(e.target.value)}
+              aria-label="Assign the selected claims to"
+              className={selectClass}
+              disabled={busy}
+            >
+              <option value="">Choose a person…</option>
+              {(people.data ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.role})
+                </option>
+              ))}
+              <option value="none">Nobody (unassign)</option>
+            </select>
+            <Button
+              variant="primary"
+              onClick={() => void assign()}
+              disabled={busy || !assignee}
+            >
+              {busy ? "Assigning…" : "Assign"}
+            </Button>
+          </>
+        )}
+        {canPrioritize && (
+          <>
+            <span className="text-[12px] text-muted">Priority</span>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              aria-label="Set the priority of the selected claims"
+              className={selectClass}
+              disabled={busy}
+            >
+              <option value="">Choose…</option>
+              {Object.entries(PRIORITIES).map(([key, p]) => (
+                <option key={key} value={key}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <Button
+              onClick={() => void prioritize()}
+              disabled={busy || !priority}
+            >
+              Set priority
+            </Button>
+          </>
+        )}
         <Button onClick={onClear} disabled={busy}>
           Clear selection
         </Button>

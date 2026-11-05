@@ -9,7 +9,22 @@ from app.core.schemas import NamedRef
 
 Money = Annotated[Decimal, Field(ge=0, le=Decimal("9999999.99"), max_digits=12, decimal_places=2)]
 
-ClaimView = Literal["all", "mine", "unassigned", "due-today", "tomorrow", "overdue", "needs-review", "merged"]
+ClaimView = Literal[
+    "all",
+    "mine",
+    "unassigned",
+    "due-today",
+    "tomorrow",
+    "overdue",
+    "needs-review",
+    "merged",
+    "awaiting-completion",
+    "returned",
+    "high-priority",
+    "closed",
+]
+WorkState = Literal["open", "pending_completion", "closed"]
+Priority = Literal["low", "normal", "high", "urgent"]
 
 
 def claim_label(number: int) -> str:
@@ -44,6 +59,9 @@ class ClaimListItem(BaseModel):
     aging_bucket: str
     needs_review: bool
     merged_into: ClaimRef | None = None
+    work_state: WorkState = "open"
+    priority: Priority = "normal"
+    returned: bool = False
 
 
 class ClaimPage(BaseModel):
@@ -87,6 +105,17 @@ class ClaimDetail(ClaimListItem):
     can_assign: bool
     can_review: bool
     withdrawn: bool = False
+    # The latest lifecycle step (who, when, why). Every step is also in the claim's history.
+    state_reason: str | None = None
+    state_changed_by: PersonRef | None = None
+    state_changed_at: datetime | None = None
+    completion_requested_by: PersonRef | None = None
+    can_note: bool = False
+    can_request_completion: bool = False
+    can_review_completion: bool = False
+    can_close: bool = False
+    can_reopen: bool = False
+    can_prioritize: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -108,6 +137,7 @@ class ClaimUpdate(BaseModel):
     followup_date: date | None = None
     assigned_user_id: uuid.UUID | None = None
     needs_review: Literal[False] | None = None
+    priority: Priority | None = None
 
 
 class NoteCreate(BaseModel):
@@ -143,6 +173,9 @@ class ClaimSummary(BaseModel):
     overdue: int
     needs_review: int
     billed_total: Decimal
+    awaiting_completion: int = 0
+    returned: int = 0
+    closed: int = 0
     by_status: list[StatusCount]
 
 
@@ -164,3 +197,25 @@ class Resolve(BaseModel):
 
     decision: Literal["same", "separate"]
     target_id: uuid.UUID | None = None
+
+
+class LifecycleNote(BaseModel):
+    """A reason or note for a lifecycle step. Required for return, close and reopen."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class ContinueFollowUp(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(default=None, max_length=1000)
+    followup_date: date
+
+
+class BulkPriority(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claim_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    priority: Priority
