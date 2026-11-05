@@ -56,3 +56,14 @@ def run_sql(sql: str, *, commit: bool = False) -> list[tuple]:
             await engine.dispose()
 
     return asyncio.run(go())
+
+
+def give_role(email: str, role_key: str, practice: str | None = None) -> None:
+    """Adds an additional role (for one practice, or for all the person's practices)."""
+    practice_sql = f"(SELECT id FROM ar.practices WHERE name = '{practice}')" if practice else "NULL"
+    run_sql(
+        f"INSERT INTO ar.user_roles (user_id, role_id, practice_id) "
+        f"SELECT u.id, r.id, {practice_sql} FROM ar.users u, ar.roles r "
+        f"WHERE u.email = '{email}' AND r.key = '{role_key}'",
+        commit=True,
+    )

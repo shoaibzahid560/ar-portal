@@ -84,7 +84,9 @@ class ClaimDetail(ClaimListItem):
     review_reason: str | None
     notes: list[NoteOut]
     can_work: bool
+    can_assign: bool
     can_review: bool
+    withdrawn: bool = False
     created_at: datetime
     updated_at: datetime
 

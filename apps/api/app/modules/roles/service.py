@@ -7,13 +7,15 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
-from app.core.context import Ctx
+from app.core.context import Ctx, require_recent_sign_in
 from app.modules.notifications import service as notify
 from app.modules.roles.models import Permission, Role, RolePermission
 from app.modules.roles.schemas import PermissionOut, RoleOut, RolesResponse
 
 # Removing these from the System Administrator would leave nobody able to fix the matrix or add users.
-ADMIN_REQUIRED = frozenset({"roles.manage", "users.manage", "users.view"})
+ADMIN_REQUIRED = frozenset(
+    {"roles.manage", "users.manage", "users.view", "users.manage_owners", "scope.all_practices"}
+)
 
 
 async def matrix(db: AsyncSession) -> RolesResponse:
@@ -36,6 +38,7 @@ async def matrix(db: AsyncSession) -> RolesResponse:
 
 
 async def set_permissions(ctx: Ctx, role_key: str, keys: list[str]) -> RolesResponse:
+    require_recent_sign_in(ctx)  # editing the matrix is an owner-level action
     role = await ctx.db.scalar(select(Role).where(Role.key == role_key))
     if role is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Role not found.")
@@ -48,7 +51,7 @@ async def set_permissions(ctx: Ctx, role_key: str, keys: list[str]) -> RolesResp
     if role.key == "system_admin" and not ADMIN_REQUIRED <= wanted:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "The System Administrator must keep: " + ", ".join(sorted(ADMIN_REQUIRED)),
+            "The Portal Owner must keep: " + ", ".join(sorted(ADMIN_REQUIRED)),
         )
 
     current = set(

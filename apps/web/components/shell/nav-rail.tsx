@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/cn";
-import { NAV_MODULES, type NavModule } from "@/lib/navigation";
+import { allowed, NAV_MODULES, type NavModule } from "@/lib/navigation";
 
 function RailLink({
   navModule,
@@ -38,9 +38,7 @@ export function NavRail() {
     pathname === m.href || pathname.startsWith(`${m.href}/`);
 
   // Only what the signed-in person's role allows. The API enforces the same rules on every request.
-  const visible = NAV_MODULES.filter(
-    (m) => m.permission === null || permissions.includes(m.permission),
-  );
+  const visible = NAV_MODULES.filter((m) => allowed(m.permission, permissions));
   const main = visible.filter((m) => m.placement === "main");
   const admin = visible.filter((m) => m.placement === "admin");
 

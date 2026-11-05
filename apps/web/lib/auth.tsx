@@ -18,6 +18,10 @@ export type Me = {
     phone: string | null;
   };
   role: { key: string; name: string };
+  extra_roles: {
+    role: { key: string; name: string };
+    practice: { id: string; name: string } | null;
+  }[];
   permissions: string[];
   practices: { id: string; name: string }[];
   teams: { id: string; name: string }[];

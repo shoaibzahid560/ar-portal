@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { UsersAdmin } from "@/components/admin/users-admin";
+import { UsersSection } from "@/components/admin/users-admin";
 import { Panel } from "@/components/data/panel";
 import { PageBody, PageHeader } from "@/components/shell/page-header";
 
@@ -15,7 +15,7 @@ export default function UsersPage() {
       />
       <PageBody>
         <Suspense fallback={<Panel>Loading users…</Panel>}>
-          <UsersAdmin />
+          <UsersSection />
         </Suspense>
       </PageBody>
     </>

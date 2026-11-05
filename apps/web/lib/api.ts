@@ -95,6 +95,10 @@ export type User = {
   phone: string | null;
   status: "active" | "paused" | "deactivated";
   role: RoleRef;
+  /** Additional roles; practice null means all of the person's practices. */
+  extra_roles: { role: RoleRef; practice: NamedRef | null }[];
+  /** Active additional permissions (grants), by description. */
+  grants: { permission: string; practice: NamedRef | null }[];
   practices: NamedRef[];
   teams: NamedRef[];
   last_login_at: string | null;
@@ -106,6 +110,7 @@ export type Practice = {
   name: string;
   status: "active" | "paused";
   notes: string;
+  import_code: string | null;
   user_count: number;
   team_count: number;
   created_at: string;
@@ -198,7 +203,9 @@ export type ClaimDetail = ClaimListItem & {
   review_reason: string | null;
   notes: ClaimNote[];
   can_work: boolean;
+  can_assign: boolean;
   can_review: boolean;
+  withdrawn: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -227,18 +234,72 @@ export type Upload = {
   uploaded_by: NamedRef;
   file_name: string;
   file_size: number;
-  status: "processing" | "completed" | "failed";
+  status:
+    | "processing"
+    | "preview"
+    | "submitted"
+    | "committed"
+    | "rejected"
+    | "discarded"
+    | "reversed"
+    | "failed";
   failure_reason: string | null;
+  mapping_warning: string | null;
   total_rows: number;
-  created_claims: number;
+  new_rows: number;
   duplicate_rows: number;
+  changed_rows: number;
+  repeat_rows: number;
   error_rows: number;
+  undecided_rows: number;
+  created_claims: number;
+  updated_claims: number;
+  skipped_rows: number;
   review_rows: number;
   created_at: string;
   completed_at: string | null;
+  submitted_by: NamedRef | null;
+  submitted_at: string | null;
+  decided_by: NamedRef | null;
+  decided_at: string | null;
+  decision_reason: string | null;
+  reversed_by: NamedRef | null;
+  reversed_at: string | null;
+  reverse_reason: string | null;
+};
+export type UploadActions = {
+  can_submit: boolean;
+  can_discard: boolean;
+  can_decide: boolean;
+  can_commit: boolean;
+  can_reject: boolean;
+  can_reverse: boolean;
+  commit_blocked_because: string | null;
 };
 export type UploadDetail = Upload & {
   errors: { row_number: number; column: string; message: string }[];
+  actions: UploadActions;
+};
+
+/** The uploaded values of a line or claim, by field. */
+export type LineValues = Record<string, string | null>;
+export type UploadRowCandidate = {
+  id: string;
+  number: string;
+  values: LineValues;
+  claim_status: string | null;
+  assigned_to: string | null;
+};
+export type UploadRow = {
+  id: number;
+  row_number: number;
+  classification: "new" | "duplicate" | "changed" | "repeat";
+  values: LineValues | null;
+  candidates: UploadRowCandidate[];
+  decision: "create" | "update" | "skip" | null;
+  target_claim_id: string | null;
+  decided_by: string | null;
+  result_claim: NamedRef | null;
 };
 
 export type AppNotification = {
@@ -251,3 +312,31 @@ export type AppNotification = {
   read: boolean;
 };
 export type NotificationPage = { items: AppNotification[]; unread: number };
+
+export type Grant = {
+  id: number;
+  person: NamedRef;
+  permission: string;
+  permission_description: string;
+  elevated: boolean;
+  practice: NamedRef | null;
+  reason: string;
+  state: "pending" | "active" | "expired" | "rejected" | "revoked";
+  requested_by: NamedRef;
+  approved_by: NamedRef | null;
+  created_at: string;
+  decided_at: string | null;
+  expires_at: string | null;
+  review_due_at: string | null;
+  review_overdue: boolean;
+  ended_at: string | null;
+  ended_by: NamedRef | null;
+  end_reason: string | null;
+  can_approve: boolean;
+};
+export type GrantablePermission = {
+  key: string;
+  module: string;
+  description: string;
+  elevated: boolean;
+};

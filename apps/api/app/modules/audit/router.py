@@ -33,10 +33,14 @@ async def list_audit_events(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> AuditPage:
     """
-    Newest first. In M0 every holder of audit.view sees all events, because they are all platform
-    events (sign-ins, users, practices, roles). Claim events arrive in M3 with practice scoping.
+    Newest first. People with access to every practice see every event. Everyone else sees the events
+    of the practices where they hold audit.view (organisation-wide events such as sign-ins are excluded).
     """
     statement = select(AuditEvent, User).outerjoin(User, User.id == AuditEvent.actor_user_id)
+    # People limited to some practices see only those practices' events (specification, section 3).
+    practices = ctx.access.practices_with("audit.view")
+    if practices is not None:
+        statement = statement.where(AuditEvent.practice_id.in_(practices))
     if action:
         statement = statement.where(
             AuditEvent.action.startswith(action) if action.endswith(".") else AuditEvent.action == action

@@ -10,7 +10,6 @@ from collections.abc import Sequence
 from sqlalchemy import select
 
 from app.core.context import Ctx
-from app.core.scope import get_scope
 from app.modules.audit.models import AuditEvent
 from app.modules.audit.schemas import Actor, AuditEventOut
 from app.modules.claims import repository as claims
@@ -54,7 +53,7 @@ async def enrich(ctx: Ctx, rows: Sequence[tuple[AuditEvent, User | None]]) -> li
         claim_numbers = dict(
             (await db.execute(select(Claim.id, Claim.number).where(Claim.id.in_(claim_ids)))).all()
         )
-        visible = claims.visible(select(Claim.id).where(Claim.id.in_(claim_ids)), ctx, await get_scope(ctx))
+        visible = claims.visible(select(Claim.id).where(Claim.id.in_(claim_ids)), ctx)
         visible_claims = set(await db.scalars(visible))
 
     uploads = _ids(by_type.get("upload", set()))
@@ -158,8 +157,10 @@ async def enrich(ctx: Ctx, rows: Sequence[tuple[AuditEvent, User | None]]) -> li
                 label, link = role_names.get(entity, entity), "/admin/settings?view=roles"
             case "list":
                 label, link = LIST_NAMES.get(entity, entity), "/admin/settings?view=lists"
-            case "auth":
+            case "auth" | "request":
                 label = entity
+            case "grant":
+                label, link = f"Grant #{entity}", "/admin/users?view=grants"
 
         if event.action == "claim.note_added" and _ids({entity}) & visible_claims:
             after = event.after or {}

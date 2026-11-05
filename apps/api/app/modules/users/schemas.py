@@ -17,6 +17,20 @@ def _clean_optional(value: str | None) -> str | None:
     return value or None
 
 
+class ExtraRoleOut(BaseModel):
+    """An additional role. Without a practice it applies in all of the person's practices."""
+
+    role: RoleRef
+    practice: NamedRef | None
+
+
+class GrantRef(BaseModel):
+    """An active additional permission, for display."""
+
+    permission: str
+    practice: NamedRef | None
+
+
 class UserOut(BaseModel):
     id: uuid.UUID
     email: str
@@ -25,6 +39,8 @@ class UserOut(BaseModel):
     phone: str | None
     status: str
     role: RoleRef
+    extra_roles: list[ExtraRoleOut] = []
+    grants: list[GrantRef] = []
     practices: list[NamedRef]
     teams: list[NamedRef]
     last_login_at: datetime | None
@@ -95,3 +111,16 @@ class IdList(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     ids: list[uuid.UUID]
+
+
+class RoleAssignment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role_key: str
+    practice_id: uuid.UUID | None = None
+
+
+class RoleAssignments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    roles: list[RoleAssignment] = Field(max_length=20)

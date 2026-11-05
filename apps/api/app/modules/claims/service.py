@@ -13,7 +13,6 @@ from app.core.clock import aging, business_today
 from app.core.config import get_settings
 from app.core.context import Ctx
 from app.core.schemas import NamedRef
-from app.core.scope import Scope, get_scope
 from app.core.storage import get_storage
 from app.modules.claims import repository
 from app.modules.claims.models import Claim, ClaimNote
@@ -50,7 +49,7 @@ def _plain(value: Any) -> Any:
 
 
 async def load_visible(ctx: Ctx, claim_id: uuid.UUID) -> Claim:
-    statement = repository.visible(select(Claim).where(Claim.id == claim_id), ctx, await get_scope(ctx))
+    statement = repository.visible(select(Claim).where(Claim.id == claim_id), ctx)
     claim = await ctx.db.scalar(statement)
     if claim is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Claim not found.")
@@ -95,6 +94,7 @@ async def list_items(ctx: Ctx, claims: list[Claim]) -> list[ClaimListItem]:
 
 async def detail(ctx: Ctx, claim: Claim) -> ClaimDetail:
     [base] = await list_items(ctx, [claim])
+    live = claim.merged_into_id is None and claim.withdrawn_at is None
     upload = await ctx.db.get(Upload, claim.upload_id)
     notes = await repository.notes(ctx.db, claim.id)
     authors = await repository.people(ctx.db, {n.author_user_id for n in notes})
@@ -124,11 +124,19 @@ async def detail(ctx: Ctx, claim: Claim) -> ClaimDetail:
             )
             for n in notes
         ],
-        can_work=ctx.can("claims.work") and claim.merged_into_id is None,
-        can_review=ctx.can("claims.review") and claim.needs_review and claim.merged_into_id is None,
+        can_work=ctx.access.has("claims.work", claim.practice_id) and live,
+        can_assign=ctx.access.has("claims.assign", claim.practice_id) and live,
+        can_review=ctx.access.has("claims.review", claim.practice_id) and claim.needs_review and live,
+        withdrawn=claim.withdrawn_at is not None,
         created_at=claim.created_at,
         updated_at=claim.updated_at,
     )
+
+
+def _require_in_practice(ctx: Ctx, permission: str, claim: Claim) -> None:
+    """The person may see this claim; may they also do this here? (Roles can differ per practice.)"""
+    if not ctx.access.has(permission, claim.practice_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, f"Permission required in this practice: {permission}")
 
 
 def _require_active(claim: Claim) -> None:
@@ -142,8 +150,12 @@ async def update(ctx: Ctx, claim_id: uuid.UUID, body: ClaimUpdate) -> ClaimDetai
     claim = await load_visible(ctx, claim_id)
     _require_active(claim)
     sent = body.model_fields_set
-    if "needs_review" in sent and not ctx.can("claims.review"):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Permission required: claims.review")
+    if sent - {"assigned_user_id", "needs_review"}:
+        _require_in_practice(ctx, "claims.work", claim)
+    if "assigned_user_id" in sent:
+        _require_in_practice(ctx, "claims.assign", claim)
+    if "needs_review" in sent:
+        _require_in_practice(ctx, "claims.review", claim)
     allowed = await active_values(ctx.db)
     before: dict[str, Any] = {}
     after: dict[str, Any] = {}
@@ -219,6 +231,7 @@ async def update(ctx: Ctx, claim_id: uuid.UUID, body: ClaimUpdate) -> ClaimDetai
 async def add_note(ctx: Ctx, claim_id: uuid.UUID, body: str) -> ClaimDetail:
     claim = await load_visible(ctx, claim_id)
     _require_active(claim)
+    _require_in_practice(ctx, "claims.work", claim)
     note = ClaimNote(claim_id=claim.id, author_user_id=ctx.user.id, body=body)
     ctx.db.add(note)
     await ctx.db.flush()
@@ -247,6 +260,7 @@ async def add_note(ctx: Ctx, claim_id: uuid.UUID, body: str) -> ClaimDetail:
 async def attach_eob(ctx: Ctx, claim_id: uuid.UUID, file: UploadFile) -> ClaimDetail:
     claim = await load_visible(ctx, claim_id)
     _require_active(claim)
+    _require_in_practice(ctx, "claims.work", claim)
     name = PurePath(file.filename or "eob").name
     extension = PurePath(name).suffix.lower()
     if extension not in EOB_TYPES:
@@ -298,23 +312,22 @@ async def read_eob(ctx: Ctx, claim_id: uuid.UUID) -> tuple[bytes, str, str]:
 # ---- Bulk assignment ----------------------------------------------------------------------------------
 
 
-async def assignable_for(
-    ctx: Ctx, scope: Scope, practice_ids: set[uuid.UUID]
-) -> list[tuple[uuid.UUID, str, str]]:
+async def assignable_for(ctx: Ctx, practice_ids: set[uuid.UUID]) -> list[tuple[uuid.UUID, str, str]]:
     """People who can take claims from every one of these practices."""
-    if not scope.company_wide and not practice_ids <= scope.practice_ids:
+    if not all(ctx.access.has("claims.assign", p) for p in practice_ids):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You can only assign within your practices.")
     return await repository.assignees_all(ctx.db, practice_ids)
 
 
 async def bulk_assign(ctx: Ctx, claim_ids: list[uuid.UUID], assignee: uuid.UUID | None) -> int:
     """Assigns many claims in one step. All of them change, or none do."""
-    scope = await get_scope(ctx)
     wanted = set(claim_ids)
-    statement = repository.active(repository.visible(select(Claim).where(Claim.id.in_(wanted)), ctx, scope))
+    statement = repository.active(repository.visible(select(Claim).where(Claim.id.in_(wanted)), ctx))
     claims = list(await ctx.db.scalars(statement))
     if len(claims) != len(wanted):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Some of these claims were not found or were merged.")
+    for claim in claims:
+        _require_in_practice(ctx, "claims.assign", claim)
     if assignee is not None:
         allowed = {
             person_id
@@ -366,12 +379,14 @@ WORK_FIELDS = (
 
 async def matches(ctx: Ctx, claim_id: uuid.UUID) -> list[ClaimDetail]:
     claim = await load_visible(ctx, claim_id)
+    _require_in_practice(ctx, "claims.review", claim)
     return [await detail(ctx, other) for other in await repository.same_visit(ctx.db, claim)]
 
 
 async def resolve(ctx: Ctx, claim_id: uuid.UUID, decision: str, target_id: uuid.UUID | None) -> ClaimDetail:
     claim = await load_visible(ctx, claim_id)
     _require_active(claim)
+    _require_in_practice(ctx, "claims.review", claim)
     if not claim.needs_review:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "This claim doesn't need review.")
 

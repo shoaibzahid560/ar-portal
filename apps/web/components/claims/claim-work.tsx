@@ -77,7 +77,7 @@ export function ClaimWork() {
   const history = useApi<AuditEvent[]>(`/claims/${claimId}/history`);
   const lists = useApi<Lists>("/lists");
   const assignees = useApi<Assignee[]>(
-    claim.data?.can_work ? `/claims/${claimId}/assignees` : null,
+    claim.data?.can_assign ? `/claims/${claimId}/assignees` : null,
   );
 
   if (claim.error)
@@ -111,6 +111,22 @@ export function ClaimWork() {
       </div>
 
       {c.needs_review && <ReviewBanner claim={c} />}
+      {c.withdrawn && (
+        <p
+          role="status"
+          className="mb-3 rounded-[9px] bg-danger-soft px-3 py-2.5 text-[12px] text-danger-ink"
+        >
+          This claim was withdrawn when{" "}
+          <Link
+            href={`/uploads/${c.upload.id}`}
+            className="font-bold underline"
+          >
+            {c.upload.number}
+          </Link>{" "}
+          was reversed. It’s kept for the record but no longer appears in any
+          list.
+        </p>
+      )}
       {c.merged_into && (
         <p
           role="status"
@@ -216,7 +232,10 @@ function WorkForm({
   const [form, setForm] = useState<FormState>(start);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const readOnly = !claim.can_work;
+  // Work fields and assignment are separate permissions, and roles can differ per practice.
+  const canWork = claim.can_work;
+  const canAssign = claim.can_assign;
+  const readOnly = !canWork && !canAssign;
   const changed = (Object.keys(form) as FormKey[]).filter(
     (k) => form[k] !== start[k],
   );
@@ -267,7 +286,13 @@ function WorkForm({
   return (
     <Panel
       title="Work on this claim"
-      action={readOnly ? <span className="text-muted">View only</span> : null}
+      action={
+        readOnly ? (
+          <span className="text-muted">View only</span>
+        ) : !canWork ? (
+          <span className="text-muted">You can change the assignment only</span>
+        ) : null
+      }
     >
       <fieldset
         disabled={readOnly || saving}
@@ -278,6 +303,7 @@ function WorkForm({
             <select
               className={cn(selectClass, "w-full")}
               value={form[key]}
+              disabled={!canWork}
               onChange={(e) => set(key, e.target.value)}
             >
               <option value="">—</option>
@@ -293,6 +319,7 @@ function WorkForm({
           <select
             className={cn(selectClass, "w-full")}
             value={form.assigned_user_id}
+            disabled={!canAssign}
             onChange={(e) => set("assigned_user_id", e.target.value)}
           >
             <option value="">Unassigned</option>
@@ -310,6 +337,7 @@ function WorkForm({
               type="date"
               className={cn(inputClass, "w-full")}
               value={form[key]}
+              disabled={!canWork}
               onChange={(e) => set(key, e.target.value)}
             />
           </Field>
@@ -321,6 +349,7 @@ function WorkForm({
               placeholder="0.00"
               className={cn(inputClass, "w-full")}
               value={form[key]}
+              disabled={!canWork}
               onChange={(e) => set(key, e.target.value.trim())}
             />
           </Field>
@@ -505,6 +534,8 @@ const HISTORY_LABELS: Record<string, string> = {
   "claim.reviewed": "Kept as a separate claim",
   "claim.merged": "Merged into another claim",
   "claim.updated_from_upload": "Updated from a newer line",
+  "claim.withdrawn": "Withdrawn (its upload was reversed)",
+  "claim.update_reversed": "Update undone (its upload was reversed)",
 };
 
 // Actions whose before/after values are worth listing, and bookkeeping keys that are not.
@@ -512,8 +543,16 @@ const DETAILED = new Set([
   "claim.updated",
   "claim.assigned",
   "claim.updated_from_upload",
+  "claim.update_reversed",
 ]);
-const HIDDEN_KEYS = new Set(["bulk", "from_line", "note_id", "characters"]);
+const HIDDEN_KEYS = new Set([
+  "bulk",
+  "from_line",
+  "note_id",
+  "characters",
+  "from_upload",
+  "upload",
+]);
 
 function HistoryPanel({
   events,

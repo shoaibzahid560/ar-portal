@@ -3,12 +3,13 @@
 from app.core.orm import Base
 from app.modules.audit.models import AuditEvent
 from app.modules.auth.models import UserSession
-from app.modules.claims.models import Claim, ClaimNote
+from app.modules.claims.models import Claim, ClaimNote, ClaimPrint
+from app.modules.grants.models import PermissionGrant
 from app.modules.lists.models import OptionListItem
 from app.modules.notifications.models import Notification
 from app.modules.practices.models import Practice, Team, TeamMember, UserPractice
-from app.modules.roles.models import Permission, Role, RolePermission
-from app.modules.uploads.models import Upload, UploadError
+from app.modules.roles.models import Permission, Role, RolePermission, UserRole
+from app.modules.uploads.models import Upload, UploadError, UploadRow
 from app.modules.users.models import User
 
 __all__ = [
@@ -16,8 +17,10 @@ __all__ = [
     "Base",
     "Claim",
     "ClaimNote",
+    "ClaimPrint",
     "Notification",
     "OptionListItem",
+    "PermissionGrant",
     "Permission",
     "Practice",
     "Role",
@@ -28,5 +31,7 @@ __all__ = [
     "UserPractice",
     "Upload",
     "UploadError",
+    "UploadRow",
+    "UserRole",
     "UserSession",
 ]

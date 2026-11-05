@@ -1,11 +1,16 @@
-from sqlalchemy import ForeignKey, Identity, SmallInteger, Text
+import uuid
+
+from sqlalchemy import BigInteger, ForeignKey, Identity, Index, SmallInteger, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.orm import Base, CreatedAt
 
 
 class Role(CreatedAt, Base):
-    """One of the six roles from the project brief. Seeded by migration; each user has exactly one."""
+    """
+    A role from the Roles & Access specification. Seeded by migration. Each user has one primary role
+    (users.role_id) and may hold additional roles, for all their practices or for one practice.
+    """
 
     __tablename__ = "roles"
 
@@ -34,3 +39,35 @@ class RolePermission(Base):
     permission_key: Mapped[str] = mapped_column(
         ForeignKey("permissions.key", ondelete="CASCADE"), primary_key=True
     )
+
+
+class UserRole(CreatedAt, Base):
+    """
+    An additional role for a user, on top of their primary role. With a practice, it applies in that
+    practice only (e.g. AR Associate everywhere, but Practice Manager / AR Lead in Practice A); without one,
+    it applies in all the practices the user is assigned to.
+    """
+
+    __tablename__ = "user_roles"
+    __table_args__ = (
+        Index(
+            "uq_user_roles_everywhere",
+            "user_id",
+            "role_id",
+            unique=True,
+            postgresql_where=text("practice_id IS NULL"),
+        ),
+        Index(
+            "uq_user_roles_practice",
+            "user_id",
+            "role_id",
+            "practice_id",
+            unique=True,
+            postgresql_where=text("practice_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("roles.id", ondelete="CASCADE"))
+    practice_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("practices.id", ondelete="CASCADE"))

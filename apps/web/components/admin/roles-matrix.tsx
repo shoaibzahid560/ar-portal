@@ -10,7 +10,13 @@ import { useAuth } from "@/lib/auth";
 import { useApi } from "@/lib/use-api";
 
 // The API refuses to remove these from the System Administrator, so they're shown locked.
-const ADMIN_LOCKED = new Set(["roles.manage", "users.manage", "users.view"]);
+const ADMIN_LOCKED = new Set([
+  "roles.manage",
+  "users.manage",
+  "users.view",
+  "users.manage_owners",
+  "scope.all_practices",
+]);
 
 type Grants = Record<string, string[]>;
 

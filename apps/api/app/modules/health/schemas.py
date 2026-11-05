@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-DatabaseStatus = Literal["ok", "unavailable", "not_configured"]
+DatabaseStatus = Literal["ok", "unavailable", "not_configured", "needs_update"]
 
 
 class HealthResponse(BaseModel):
@@ -10,3 +10,5 @@ class HealthResponse(BaseModel):
     environment: str
     version: str
     database: DatabaseStatus
+    schema_version: str | None = None
+    expected_schema_version: str

@@ -168,16 +168,20 @@ def test_admins_cannot_lock_themselves_out(monkeypatch: pytest.MonkeyPatch) -> N
     assert admin.patch(f"/api/users/{me}", json={"full_name": "Admin Renamed"}).status_code == 200
 
 
-def test_last_system_administrator_cannot_be_removed(monkeypatch: pytest.MonkeyPatch) -> None:
-    set_role_permissions(monkeypatch, "management", ["dashboard.view", "users.view", "users.manage"])
+def test_portal_owner_accounts_can_only_be_changed_by_a_portal_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    set_role_permissions(
+        monkeypatch, "management", ["dashboard.view", "scope.all_practices", "users.view", "users.manage"]
+    )
     try:
         management = browser_for(monkeypatch, MANAGEMENT)
         response = management.post(f"/api/users/{user_id(ADMIN)}/deactivate")
-        assert response.status_code == 400
-        assert "last active System Administrator" in response.json()["detail"]
+        assert response.status_code == 403
+        assert "Only a Portal Owner" in response.json()["detail"]
     finally:
         set_role_permissions(
-            monkeypatch, "management", ["dashboard.view", "users.view", "practices.view", "audit.view"]
+            monkeypatch,
+            "management",
+            ["dashboard.view", "scope.all_practices", "users.view", "practices.view", "audit.view"],
         )
 
 

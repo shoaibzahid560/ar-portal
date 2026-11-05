@@ -41,6 +41,8 @@ class Claim(Timestamps, Base):
     # Set when a reviewer decides this line is the same claim as an earlier one. The line is kept (so the
     # same line in a later upload is still recognised) but leaves every list; the earlier claim carries on.
     merged_into_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("claims.id"), index=True)
+    # Set when the upload that created this claim was reversed. The claim leaves every list but is kept.
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # From the upload
     patient_name: Mapped[str] = mapped_column(Text)
@@ -78,3 +80,19 @@ class ClaimNote(CreatedAt, Base):
     claim_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("claims.id", ondelete="CASCADE"), index=True)
     author_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     body: Mapped[str] = mapped_column(Text)
+
+
+class ClaimPrint(CreatedAt, Base):
+    """
+    Another line that belongs to an existing claim: when a reviewer decides an uploaded line updates a
+    claim, the line's fingerprint is kept here so the same line in a later sheet is recognised and skipped.
+    """
+
+    __tablename__ = "claim_prints"
+    __table_args__ = (UniqueConstraint("practice_id", "fingerprint"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    practice_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("practices.id"))
+    fingerprint: Mapped[str] = mapped_column(Text)
+    claim_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("claims.id", ondelete="CASCADE"), index=True)
+    upload_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("uploads.id"), index=True)

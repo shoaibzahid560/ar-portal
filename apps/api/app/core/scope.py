@@ -10,11 +10,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 
 from app.core.context import Ctx
-from app.modules.practices.models import Team, TeamMember, UserPractice
-
-# Roles that see the whole company (project brief, section 3). Everyone else sees only their
-# own practices and teams. Management decision #1 may change how practice and team scope combine.
-COMPANY_WIDE_ROLES = frozenset({"system_admin", "management"})
+from app.modules.practices.models import Team
 
 
 @dataclass(frozen=True)
@@ -25,20 +21,16 @@ class Scope:
 
 
 async def get_scope(ctx: Ctx) -> Scope:
-    if ctx.role.key in COMPANY_WIDE_ROLES:
+    """The practices and teams a person works in (company-wide with scope.all_practices)."""
+    access = ctx.access
+    if access.all_practices:
         return Scope(company_wide=True, practice_ids=frozenset(), team_ids=frozenset())
-    practice_ids = await ctx.db.scalars(
-        select(UserPractice.practice_id).where(UserPractice.user_id == ctx.user.id)
-    )
-    own_teams = await ctx.db.scalars(select(TeamMember.team_id).where(TeamMember.user_id == ctx.user.id))
-    practices = frozenset(practice_ids)
-    # Teams they belong to, plus every team that sits inside one of their practices.
+    practices = access.reachable_practice_ids
+    # Teams they belong to or lead, plus every team that sits inside one of their practices.
     practice_teams = (
         await ctx.db.scalars(select(Team.id).where(Team.practice_id.in_(practices))) if practices else []
     )
-    return Scope(
-        company_wide=False, practice_ids=practices, team_ids=frozenset(own_teams) | set(practice_teams)
-    )
+    return Scope(company_wide=False, practice_ids=practices, team_ids=access.team_ids | set(practice_teams))
 
 
 def require_within_scope(

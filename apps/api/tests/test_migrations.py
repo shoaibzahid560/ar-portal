@@ -13,9 +13,11 @@ EXPECTED_TABLES = {
     "alembic_version",
     "audit_events",
     "claim_notes",
+    "claim_prints",
     "claims",
     "notifications",
     "option_list_items",
+    "permission_grants",
     "permissions",
     "practices",
     "role_permissions",
@@ -23,7 +25,9 @@ EXPECTED_TABLES = {
     "sessions",
     "team_members",
     "teams",
+    "user_roles",
     "upload_errors",
+    "upload_rows",
     "uploads",
     "user_practices",
     "users",
@@ -40,30 +44,50 @@ def test_all_tables_live_in_the_ar_schema() -> None:
     assert {name for (name,) in rows} == EXPECTED_TABLES
 
 
-def test_six_roles_are_seeded() -> None:
-    rows = _run("SELECT key FROM ar.roles")
-    assert {key for (key,) in rows} == {
-        "system_admin",
-        "management",
-        "ar_manager",
-        "ar_lead",
-        "ar_associate",
-        "auditor",
+def test_the_specifications_roles_are_seeded() -> None:
+    rows = _run("SELECT key, name FROM ar.roles")
+    assert dict(rows) == {
+        "system_admin": "Portal Owner / Super Admin",
+        "org_admin": "Organization Admin",
+        "ar_manager": "Operations Manager",
+        "auditor": "Reporting Analyst / Auditor",
+        "ar_lead": "Practice Manager / AR Lead",
+        "team_lead": "AR Team Lead",
+        "claim_importer": "Claim Importer",
+        "ar_associate": "AR Associate",
+        "management": "Management (company-wide view)",
     }
 
 
-def test_system_admin_has_every_permission_and_associates_only_work_claims() -> None:
-    [(total,)] = _run("SELECT count(*) FROM ar.permissions")
-    [(admin,)] = _run(
-        "SELECT count(*) FROM ar.role_permissions rp JOIN ar.roles r ON r.id = rp.role_id "
-        "WHERE r.key = 'system_admin'"
+def test_default_access_follows_the_specification() -> None:
+    def permissions(role: str) -> set[str]:
+        rows = _run(
+            "SELECT rp.permission_key FROM ar.role_permissions rp JOIN ar.roles r ON r.id = rp.role_id "
+            f"WHERE r.key = '{role}'"
+        )
+        return {key for (key,) in rows}
+
+    every = {key for (key,) in _run("SELECT key FROM ar.permissions")}
+    assert permissions("system_admin") == every - {"claims.receive"}  # the owner isn't assigned claims
+    assert permissions("ar_associate") == {
+        "dashboard.view",
+        "claims.view",
+        "claims.work",
+        "claims.assign",
+        "claims.receive",
+    }
+    assert permissions("claim_importer") == {
+        "dashboard.view",
+        "practices.view",
+        "uploads.view",
+        "uploads.create",
+    }
+    assert "uploads.create" not in permissions("ar_lead")  # uploading belongs to Claim Importer
+    assert {"claims.view_team", "claims.assign", "claims.receive"} <= permissions("team_lead")
+    assert "roles.manage" not in permissions("org_admin") and "users.manage_owners" not in permissions(
+        "org_admin"
     )
-    associate = _run(
-        "SELECT rp.permission_key FROM ar.role_permissions rp JOIN ar.roles r ON r.id = rp.role_id "
-        "WHERE r.key = 'ar_associate'"
-    )
-    assert admin == total
-    assert {key for (key,) in associate} == {"dashboard.view", "claims.view", "claims.work"}
+    assert not {"claims.work", "claims.assign"} & permissions("auditor")
 
 
 def test_audit_events_are_append_only() -> None:

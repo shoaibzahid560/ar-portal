@@ -48,7 +48,7 @@ export function ClaimsTable({
   const [notice, setNotice] = useState<string | null>(null);
   const lists = useApi<Lists>("/lists");
   const { permissions } = useAuth();
-  const canAssign = permissions.includes("claims.work");
+  const canAssign = permissions.includes("claims.assign");
 
   const search = new URLSearchParams({
     view,

@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 
 from app.core.clock import business_today
 from tests.auth_helpers import app_uses_test_database, browser_for
-from tests.db import migrate_fresh, requires_database, run_sql
+from tests.db import give_role, migrate_fresh, requires_database, run_sql
+from tests.upload_helpers import preview, upload_and_commit
 
 pytestmark = requires_database
 
@@ -18,6 +19,7 @@ WEEK_1 = FIXTURES / "Sample_Practice_AR-HBS_10-22-2026_sheet.xlsx"
 WEEK_2 = FIXTURES / "Sample_Practice_AR-HBS_10-29-2026_sheet.xlsx"
 
 ADMIN, MANAGEMENT, LEAD = "admin@example.com", "management@example.com", "lead@example.com"
+APPROVER = "approver@example.com"  # an Organization Admin: approves what the lead uploads
 ASSOC, ASSOC_2, OUTSIDER = "assoc@example.com", "assoc2@example.com", "outsider@example.com"
 
 
@@ -43,6 +45,7 @@ def database() -> Iterator[None]:
         INSERT INTO ar.users (email, full_name, role_id)
         SELECT v.email, v.name, r.id
         FROM (VALUES ('{ADMIN}', 'Admin', 'system_admin'),
+                     ('{APPROVER}', 'Approver', 'org_admin'),
                      ('{MANAGEMENT}', 'Management', 'management'),
                      ('{LEAD}', 'Lead', 'ar_lead'),
                      ('{ASSOC}', 'Associate One', 'ar_associate'),
@@ -59,17 +62,29 @@ def database() -> Iterator[None]:
         """,
     ):
         run_sql(statement, commit=True)
+    give_role(LEAD, "claim_importer")  # Practice Managers / AR Leads who upload also hold Claim Importer
     with app_uses_test_database():
         yield
 
 
-def upload(browser: TestClient, practice: str, path: Path, name: str | None = None) -> dict:
-    response = browser.post(
-        "/api/uploads",
-        data={"practice_id": practice_id(practice)},
-        files={"file": (name or path.name, path.read_bytes())},
+def upload(browser: TestClient, practice: str, path: Path, decision: str = "create") -> dict:
+    """Uploads, then the approver decides open lines, the uploader submits and the approver commits."""
+    return upload_and_commit(
+        browser, browser_for_approver(), practice_id(practice), path.name, path.read_bytes(), decision
     )
-    return {"status_code": response.status_code, **response.json()}
+
+
+_approver: list[TestClient] = []
+
+
+def browser_for_approver() -> TestClient:
+    return _approver[0]
+
+
+@pytest.fixture(autouse=True)
+def approver(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    _approver[:] = [browser_for(monkeypatch, APPROVER)]
+    yield
 
 
 def first_claim(browser: TestClient, **params: str) -> dict:
@@ -79,40 +94,69 @@ def first_claim(browser: TestClient, **params: str) -> dict:
 # ---- Uploads ----------------------------------------------------------------------------------------
 
 
-def test_lead_uploads_the_week_one_sheet(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_lead_uploads_the_week_one_sheet_and_a_second_person_commits_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     lead = browser_for(monkeypatch, LEAD)
+
+    shown = preview(lead, practice_id("Practice One"), WEEK_1.name, WEEK_1.read_bytes())
+    assert shown["status"] == "preview" and one("SELECT count(*) FROM ar.claims") == 0  # nothing created yet
+    assert (shown["total_rows"], shown["new_rows"], shown["repeat_rows"], shown["error_rows"]) == (
+        87,
+        86,
+        1,
+        0,
+    )
+    lead.post(f"/api/uploads/{shown['id']}/discard")
 
     result = upload(lead, "Practice One", WEEK_1)
 
-    assert result["status_code"] == 201, result
-    assert result["status"] == "completed"
-    assert result["total_rows"] == 87 and result["created_claims"] == 87
-    assert result["duplicate_rows"] == 0 and result["error_rows"] == 0
+    assert result["status"] == "committed"
+    assert result["created_claims"] == 87  # the repeated line was confirmed as a separate claim
+    assert result["decided_by"]["name"] == "Approver" and result["submitted_by"]["name"] == "Lead"
     assert one("SELECT count(*) FROM ar.audit_events WHERE action = 'claim.imported'") == 87
 
 
 def test_same_file_twice_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    result = upload(browser_for(monkeypatch, LEAD), "Practice One", WEEK_1)
+    result = preview(
+        browser_for(monkeypatch, LEAD), practice_id("Practice One"), WEEK_1.name, WEEK_1.read_bytes()
+    )
 
     assert result["status_code"] == 409
     assert "already uploaded as UPL-" in result["detail"]
 
 
-def test_next_weeks_sheet_skips_carried_over_lines_and_flags_a_changed_one(
+def test_next_weeks_sheet_skips_carried_over_lines_and_updates_a_changed_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    result = upload(browser_for(monkeypatch, LEAD), "Practice One", WEEK_2)
+    lead = browser_for(monkeypatch, LEAD)
+    shown = preview(lead, practice_id("Practice One"), WEEK_2.name, WEEK_2.read_bytes())
+    assert (shown["total_rows"], shown["duplicate_rows"], shown["changed_rows"], shown["new_rows"]) == (
+        82,
+        71,
+        1,
+        10,
+    )
+    lead.post(f"/api/uploads/{shown['id']}/discard")
 
-    assert result["total_rows"] == 82
-    assert result["duplicate_rows"] == 71  # the lines carried over from week one
-    assert result["created_claims"] == 11  # 10 new visits + 1 line whose amount changed
-    assert result["review_rows"] == 1  # that changed line, flagged for a person to check
-    assert one("SELECT count(*) FROM ar.claims") == 98
+    result = upload(lead, "Practice One", WEEK_2, decision="update")
+
+    assert (result["created_claims"], result["updated_claims"], result["skipped_rows"]) == (10, 1, 71)
+    assert one("SELECT count(*) FROM ar.claims") == 97
 
 
 def test_uploads_are_limited_to_the_practices_in_scope(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert upload(browser_for(monkeypatch, LEAD), "Practice Two", WEEK_1)["status_code"] == 403
-    assert upload(browser_for(monkeypatch, ASSOC), "Practice One", WEEK_1)["status_code"] == 403
+    data = WEEK_1.read_bytes()
+    assert (
+        preview(browser_for(monkeypatch, LEAD), practice_id("Practice Two"), WEEK_1.name, data)["status_code"]
+        == 403
+    )
+    assert (
+        preview(browser_for(monkeypatch, ASSOC), practice_id("Practice One"), WEEK_1.name, data)[
+            "status_code"
+        ]
+        == 403
+    )
 
 
 def test_row_problems_are_listed_and_the_report_has_no_cell_values(
@@ -127,10 +171,12 @@ def test_row_problems_are_listed_and_the_report_has_no_cell_values(
     )
     admin = browser_for(monkeypatch, ADMIN)
 
-    result = upload(admin, "Practice Two", sheet)
+    result = upload_and_commit(
+        admin, browser_for(monkeypatch, APPROVER), practice_id("Practice Two"), sheet.name, sheet.read_bytes()
+    )
     report = admin.get(f"/api/uploads/{result['id']}/errors.csv").text
 
-    assert result["status"] == "completed"
+    assert result["status"] == "committed"
     assert (result["total_rows"], result["created_claims"], result["error_rows"]) == (3, 1, 2)
     assert [(e["row_number"], e["column"]) for e in result["errors"]] == [(3, "Service Date"), (4, "Billed")]
     assert "someday" not in report and "lots" not in report and "Test Patient" not in report
@@ -140,7 +186,9 @@ def test_unreadable_file_is_recorded_as_failed(monkeypatch: pytest.MonkeyPatch, 
     sheet = tmp_path / "broken.xlsx"
     sheet.write_bytes(b"this is not a workbook")
 
-    result = upload(browser_for(monkeypatch, ADMIN), "Practice Two", sheet)
+    result = preview(
+        browser_for(monkeypatch, ADMIN), practice_id("Practice Two"), sheet.name, sheet.read_bytes()
+    )
 
     assert result["status"] == "failed"
     assert "couldn't be opened" in result["failure_reason"]
@@ -159,8 +207,8 @@ def test_associates_see_only_their_own_claims_and_others_see_their_scope(
     outsider = browser_for(monkeypatch, OUTSIDER)
 
     assert associate.get("/api/claims").json()["total"] == 0
-    assert lead.get("/api/claims").json()["total"] == 98
-    assert management.get("/api/claims").json()["total"] == 99  # includes Practice Two's claim
+    assert lead.get("/api/claims").json()["total"] == 97
+    assert management.get("/api/claims").json()["total"] == 98  # includes Practice Two's claim
     assert outsider.get("/api/claims").json()["total"] == 0
 
 
@@ -269,8 +317,10 @@ def test_view_only_roles_see_who_a_claim_was_assigned_to(monkeypatch: pytest.Mon
     assert assigned["actor"]["name"] == "Lead"
 
 
-def test_review_flag_can_be_cleared(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_review_flag_from_older_uploads_can_still_be_cleared(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Uploads from before import approval flagged lines on the claim itself; those can still be cleared."""
     lead = browser_for(monkeypatch, LEAD)
+    run_sql("UPDATE ar.claims SET needs_review = true WHERE number = 5", commit=True)
     flagged = first_claim(lead, view="needs-review")
 
     cleared = lead.patch(f"/api/claims/{flagged['id']}", json={"needs_review": False})
@@ -296,8 +346,8 @@ def test_follow_up_views_and_counts(monkeypatch: pytest.MonkeyPatch) -> None:
     summary = lead.get("/api/claims/summary").json()
 
     assert counts["due-today"] == 1 and counts["overdue"] == 1 and counts["tomorrow"] == 1
-    assert summary["total"] == 98 and summary["due_today"] == 1 and summary["overdue"] == 1
-    assert sum(s["count"] for s in summary["by_status"]) == 98
+    assert summary["total"] == 97 and summary["due_today"] == 1 and summary["overdue"] == 1
+    assert sum(s["count"] for s in summary["by_status"]) == 97
 
 
 # ---- Dropdown lists ------------------------------------------------------------------------------------
@@ -345,7 +395,7 @@ def test_audit_log_shows_note_text_to_those_who_may_see_the_claim(monkeypatch: p
         commit=True,
     )
     auditor = browser_for(monkeypatch, "auditor2@example.com")
-    [seen_by_auditor] = auditor.get("/api/audit-events", params={"action": "claim.note_added"}).json()[
-        "events"
-    ]
-    assert seen_by_auditor["note"] is None  # the claim belongs to a practice outside the auditor's scope
+    # An auditor limited to Practice Two sees only Practice Two's events: not this note, and not
+    # organisation-wide events such as other people's sign-ins.
+    assert auditor.get("/api/audit-events", params={"action": "claim.note_added"}).json()["events"] == []
+    assert auditor.get("/api/audit-events", params={"action": "auth."}).json()["events"] == []

@@ -26,9 +26,12 @@ CanManageTeams = Annotated[Ctx, Depends(require("teams.manage"))]
 async def list_practices(
     ctx: CanView,
     status_filter: Annotated[Literal["active", "paused"] | None, Query(alias="status")] = None,
+    can: Annotated[str | None, Query(max_length=60, description="Only practices where you hold this")] = None,
 ) -> list[PracticeOut]:
-    """Practices within the caller's scope."""
+    """Practices within the caller's scope; with `can`, only those where the caller holds that permission."""
     practices = await repository.list_practices(ctx.db, await get_scope(ctx), status=status_filter)
+    if can:
+        practices = [p for p in practices if ctx.access.has(can, p.id)]
     return await service.practices_out(ctx, list(practices))
 
 

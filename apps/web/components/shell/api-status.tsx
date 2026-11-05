@@ -6,7 +6,7 @@ import type { Tone } from "@/lib/status";
 
 type Health = {
   status: "ok";
-  database: "ok" | "unavailable" | "not_configured";
+  database: "ok" | "unavailable" | "not_configured" | "needs_update";
 };
 
 type State =
@@ -22,6 +22,11 @@ function describe(state: State): { label: string; tone: Tone } {
       return { label: "API and database connected", tone: "ok" };
     case "not_configured":
       return { label: "API connected, no database yet", tone: "info" };
+    case "needs_update":
+      return {
+        label: "Database needs updating: run alembic upgrade head",
+        tone: "danger",
+      };
     default:
       return { label: "API connected, database unavailable", tone: "warn" };
   }

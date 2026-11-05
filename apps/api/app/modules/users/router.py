@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.context import Ctx, require
 from app.core.scope import get_scope
 from app.modules.users import repository, service
-from app.modules.users.schemas import IdList, UserCreate, UserOut, UserUpdate
+from app.modules.users.schemas import IdList, RoleAssignments, UserCreate, UserOut, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -58,3 +58,9 @@ async def set_practices(ctx: CanManage, user_id: uuid.UUID, body: IdList) -> Use
 @router.put("/{user_id}/teams", response_model=UserOut)
 async def set_teams(ctx: CanManage, user_id: uuid.UUID, body: IdList) -> UserOut:
     return await service.set_teams(ctx, user_id, set(body.ids))
+
+
+@router.put("/{user_id}/roles", response_model=UserOut)
+async def set_roles(ctx: CanManage, user_id: uuid.UUID, body: RoleAssignments) -> UserOut:
+    """Additional roles, each for all the person's practices (practice_id null) or for one practice."""
+    return await service.set_roles(ctx, user_id, body.roles)

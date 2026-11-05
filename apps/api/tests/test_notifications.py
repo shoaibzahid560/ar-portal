@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 
 from app.core.clock import business_today
 from tests.auth_helpers import app_uses_test_database, browser_for, sign_in_as
-from tests.db import migrate_fresh, requires_database, run_sql
+from tests.db import give_role, migrate_fresh, requires_database, run_sql
+from tests.upload_helpers import preview, upload_and_commit
 
 pytestmark = requires_database
 
@@ -50,6 +51,7 @@ def database() -> Iterator[None]:
         """,
     ):
         run_sql(statement, commit=True)
+    give_role(LEAD, "claim_importer")  # Practice Managers / AR Leads who upload also hold Claim Importer
     with app_uses_test_database():
         yield
 
@@ -62,35 +64,40 @@ def kinds(browser: TestClient) -> list[str]:
     return [n["kind"] for n in inbox(browser)]
 
 
-def upload(browser: TestClient, name: str, data: bytes) -> dict:
-    practice = str(one("SELECT id FROM ar.practices"))
-    response = browser.post("/api/uploads", data={"practice_id": practice}, files={"file": (name, data)})
-    assert response.status_code == 201, response.text
-    return response.json()
+def practice() -> str:
+    return str(one("SELECT id FROM ar.practices"))
 
 
-def test_every_upload_reaches_management_but_not_the_uploader(monkeypatch: pytest.MonkeyPatch) -> None:
-    lead = browser_for(monkeypatch, LEAD)
-    upload(lead, WEEK_1.name, WEEK_1.read_bytes())
-
-    assert kinds(browser_for(monkeypatch, MANAGEMENT)) == ["upload.completed"]
-    assert "upload.completed" in kinds(browser_for(monkeypatch, ADMIN))
-    assert kinds(lead) == []
-    [note] = inbox(browser_for(monkeypatch, MANAGEMENT))
-    assert note["title"].startswith("UPL-000001 uploaded for Practice One") and "87 new" in note["body"]
-
-
-def test_upload_problems_reach_the_uploader_and_the_practice_reviewers(
+def test_every_committed_upload_reaches_management_and_the_uploader_hears_the_outcome(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    lead = browser_for(monkeypatch, LEAD)
-    upload(
-        lead, "bad.csv", b"Patient,Service Date,Subscriber ID,Insurance Carrier,Billed\nA,someday,1,Aetna,5\n"
-    )
-    upload(lead, WEEK_2.name, WEEK_2.read_bytes())
+    lead, admin = browser_for(monkeypatch, LEAD), browser_for(monkeypatch, ADMIN)
+    upload_and_commit(lead, admin, practice(), WEEK_1.name, WEEK_1.read_bytes())
 
-    assert kinds(lead)[:2] == ["review.waiting", "upload.errors"]
-    assert "review.waiting" not in kinds(browser_for(monkeypatch, ASSOC))
+    assert kinds(browser_for(monkeypatch, MANAGEMENT)) == ["upload.completed"]
+    assert "upload.awaiting_approval" in kinds(admin)  # the approver was asked
+    assert kinds(lead) == ["upload.committed"]
+    [note] = inbox(browser_for(monkeypatch, MANAGEMENT))
+    assert note["title"] == "UPL-000001 committed for Practice One" and "87 new claims" in note["body"]
+
+
+def test_upload_problems_reach_the_uploader_and_approvers_hear_what_needs_deciding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lead, admin = browser_for(monkeypatch, LEAD), browser_for(monkeypatch, ADMIN)
+    preview(
+        lead,
+        practice(),
+        "bad.csv",
+        b"Patient,Service Date,Subscriber ID,Insurance Carrier,Billed\nA,someday,1,Aetna,5\n",
+    )
+    shown = preview(lead, practice(), WEEK_2.name, WEEK_2.read_bytes())
+    lead.post(f"/api/uploads/{shown['id']}/submit")
+
+    assert kinds(lead)[0] == "upload.errors"
+    waiting = next(n for n in inbox(admin) if n["title"].startswith("UPL-000003"))
+    assert waiting["kind"] == "upload.awaiting_approval" and "1 need a decision" in waiting["body"]
+    assert "upload.awaiting_approval" not in kinds(browser_for(monkeypatch, ASSOC))
 
 
 def test_bulk_assignment_sends_one_notification_per_person(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -176,7 +183,7 @@ def test_management_hears_about_users_permissions_and_refused_sign_ins(
 
     titles = [n["title"] for n in inbox(browser_for(monkeypatch, MANAGEMENT))]
     assert "Admin added New Person as AR Associate" in titles
-    assert "Admin changed the Auditor permissions" in titles
+    assert "Admin changed the Reporting Analyst / Auditor permissions" in titles
     assert "Sign-in refused for stranger@example.com" in titles
     assert not any("added New Person" in n["title"] for n in inbox(admin))
 

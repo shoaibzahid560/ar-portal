@@ -17,6 +17,7 @@ class PracticeOut(BaseModel):
     name: str
     status: str
     notes: str
+    import_code: str | None = None
     user_count: int
     team_count: int
     created_at: datetime
@@ -27,6 +28,7 @@ class PracticeCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=120)
     notes: str = Field(default="", max_length=2000)
+    import_code: str | None = Field(default=None, max_length=60)
 
     _name = field_validator("name")(_strip_required)
 
@@ -37,6 +39,7 @@ class PracticeUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     status: Literal["active", "paused"] | None = None
     notes: str | None = Field(default=None, max_length=2000)
+    import_code: str | None = Field(default=None, max_length=60)
 
     @field_validator("name")
     @classmethod

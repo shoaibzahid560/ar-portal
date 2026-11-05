@@ -77,10 +77,11 @@ export function UploadsView() {
                 <Th>Practice</Th>
                 <Th>File</Th>
                 <Th className="text-right">Rows</Th>
-                <Th className="text-right">New claims</Th>
+                <Th className="text-right">New</Th>
                 <Th className="text-right">Already in system</Th>
+                <Th className="text-right">Possible changes</Th>
                 <Th className="text-right">Rows with errors</Th>
-                <Th className="text-right">Needs review</Th>
+                <Th>Outcome</Th>
                 <Th>Uploaded by</Th>
                 <Th>Date</Th>
                 <Th className="pr-[15px]">Status</Th>
@@ -107,8 +108,21 @@ export function UploadsView() {
                     {u.file_name}
                   </Td>
                   <Td className="text-right">{u.total_rows}</Td>
-                  <Td className="text-right">{u.created_claims}</Td>
+                  <Td className="text-right">{u.new_rows}</Td>
                   <Td className="text-right">{u.duplicate_rows}</Td>
+                  <Td
+                    className={cn(
+                      "text-right",
+                      u.undecided_rows > 0 && "font-bold text-warn-ink",
+                    )}
+                    title={
+                      u.undecided_rows
+                        ? `${u.undecided_rows} still need a decision`
+                        : undefined
+                    }
+                  >
+                    {u.changed_rows + u.repeat_rows}
+                  </Td>
                   <Td
                     className={cn(
                       "text-right",
@@ -117,13 +131,10 @@ export function UploadsView() {
                   >
                     {u.error_rows}
                   </Td>
-                  <Td
-                    className={cn(
-                      "text-right",
-                      u.review_rows > 0 && "font-bold text-warn-ink",
-                    )}
-                  >
-                    {u.review_rows}
+                  <Td className="whitespace-nowrap text-[12px]">
+                    {u.status === "committed" || u.status === "reversed"
+                      ? `${u.created_claims} created, ${u.updated_claims} updated`
+                      : "—"}
                   </Td>
                   <Td>{u.uploaded_by.name}</Td>
                   <Td className="whitespace-nowrap">
@@ -144,7 +155,10 @@ export function UploadsView() {
       {open && (
         <NewUploadDialog
           onClose={() => setOpen(false)}
-          onDone={(id) => router.push(`/uploads/${id}`)}
+          onDone={(id) => {
+            setOpen(false);
+            router.push(`/uploads/${id}`);
+          }}
         />
       )}
     </>
@@ -158,7 +172,9 @@ function NewUploadDialog({
   onClose: () => void;
   onDone: (uploadId: string) => void;
 }) {
-  const practices = useApi<Practice[]>("/practices?status=active");
+  const practices = useApi<Practice[]>(
+    "/practices?status=active&can=uploads.create",
+  );
   const [practiceId, setPracticeId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -201,7 +217,7 @@ function NewUploadDialog({
             onClick={() => void submit()}
             disabled={busy}
           >
-            {busy ? "Checking the file…" : "Upload"}
+            {busy ? "Checking the file…" : "Upload and preview"}
           </Button>
         </>
       }
@@ -230,7 +246,7 @@ function NewUploadDialog({
         </Field>
         <Field
           label="AR sheet"
-          hint="The practice’s AR sheet as .xlsx or .csv, up to 4 MB. Lines already in the system are skipped."
+          hint="The practice’s AR sheet as .xlsx or .csv, up to 4 MB. Nothing is created until a second person approves it."
         >
           <input
             type="file"

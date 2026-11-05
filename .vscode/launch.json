@@ -13,24 +13,16 @@
       "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
-      "args": [
-        "app.main:app",
-        "--reload",
-        "--port",
-        "8000"
-      ],
+      "args": ["app.main:app", "--reload", "--port", "8000"],
       "cwd": "${workspaceFolder}/apps/api",
-      "justMyCode": true,
-      "python": "${workspaceFolder}/apps/api/.venv/Scripts/python.exe"
+      "envFile": "${workspaceFolder}/apps/api/.env",
+      "justMyCode": true
     }
   ],
   "compounds": [
     {
       "name": "Web + API",
-      "configurations": [
-        "API: uvicorn",
-        "Web: next dev"
-      ],
+      "configurations": ["API: uvicorn", "Web: next dev"],
       "stopAll": true
     }
   ]

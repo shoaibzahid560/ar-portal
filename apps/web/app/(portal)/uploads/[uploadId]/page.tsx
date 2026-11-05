@@ -9,7 +9,10 @@ export const metadata: Metadata = { title: "Upload" };
 export default function UploadPage() {
   return (
     <>
-      <PageHeader title="Upload report" subtitle="Every row accounted for" />
+      <PageHeader
+        title="Upload"
+        subtitle="Preview, decisions and approval: nothing is created until a second person commits it"
+      />
       <PageBody>
         <Suspense fallback={<Panel>Loading…</Panel>}>
           <UploadReport />

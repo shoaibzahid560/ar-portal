@@ -12,7 +12,30 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export type NavView = { slug: string; label: string };
+/** A saved view in the side panel. With `permission`, it's shown only to people holding it. */
+export type NavView = {
+  slug: string;
+  label: string;
+  permission?: string | string[];
+};
+
+/** Any of these lets a person see claims (their own, their teams', or their practices'). */
+const CLAIM_VIEWERS = [
+  "claims.view",
+  "claims.view_team",
+  "claims.view_practice",
+];
+
+/** True if the person holds the permission, or any one of a list of permissions. */
+export function allowed(
+  permission: string | string[] | null,
+  held: string[],
+): boolean {
+  if (permission === null) return true;
+  return (Array.isArray(permission) ? permission : [permission]).some((p) =>
+    held.includes(p),
+  );
+}
 
 export type NavModule = {
   key: string;
@@ -26,7 +49,7 @@ export type NavModule = {
    * Permission needed to see this module. null means visible to everyone until the module that
    * builds it adds its permission (review in M2, reports in M6).
    */
-  permission: string | null;
+  permission: string | string[] | null;
   placement: "main" | "admin";
   views: NavView[];
 };
@@ -57,12 +80,15 @@ export const NAV_MODULES: NavModule[] = [
     title: "Uploads",
     href: "/uploads",
     icon: Upload,
-    permission: "uploads.view",
+    permission: ["uploads.view", "uploads.create"],
     placement: "main",
     views: [
       { slug: "all", label: "All Uploads" },
+      { slug: "awaiting", label: "Waiting for Approval" },
+      { slug: "previews", label: "Previews" },
       { slug: "with-errors", label: "With Errors" },
       { slug: "failed", label: "Failed" },
+      { slug: "reversed", label: "Reversed" },
     ],
   },
   {
@@ -84,7 +110,7 @@ export const NAV_MODULES: NavModule[] = [
     title: "Claims",
     href: "/claims",
     icon: FileText,
-    permission: "claims.view",
+    permission: CLAIM_VIEWERS,
     placement: "main",
     views: [
       { slug: "all", label: "All Claims" },
@@ -101,7 +127,7 @@ export const NAV_MODULES: NavModule[] = [
     title: "Follow-ups",
     href: "/followups",
     icon: CalendarClock,
-    permission: "claims.view",
+    permission: CLAIM_VIEWERS,
     placement: "main",
     views: [
       { slug: "due-today", label: "Due Today" },
@@ -135,7 +161,7 @@ export const NAV_MODULES: NavModule[] = [
     views: [
       { slug: "all", label: "All Events" },
       { slug: "work", label: "Uploads & Claims" },
-      { slug: "access", label: "Sign-ins" },
+      { slug: "access", label: "Sign-ins & Refusals" },
       { slug: "admin", label: "Admin Changes" },
     ],
   },
@@ -152,6 +178,11 @@ export const NAV_MODULES: NavModule[] = [
       { slug: "active", label: "Active" },
       { slug: "paused", label: "Paused" },
       { slug: "deactivated", label: "Deactivated" },
+      {
+        slug: "grants",
+        label: "Access Grants",
+        permission: ["grants.manage", "grants.approve"],
+      },
     ],
   },
   {

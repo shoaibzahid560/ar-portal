@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
+import { GrantsAdmin } from "@/components/admin/grants-admin";
 import { EmptyState } from "@/components/data/empty-state";
 import { Panel } from "@/components/data/panel";
 import { StatusPill } from "@/components/data/status-pill";
@@ -42,7 +43,16 @@ const STATUS_LABEL: Record<User["status"], string> = {
   deactivated: "Deactivated",
 };
 
-export function UsersAdmin() {
+/** The Users screen: the people list, or the Access Grants view. */
+export function UsersSection() {
+  const view = resolveView(
+    getModule("users"),
+    useSearchParams().get("view"),
+  ).slug;
+  return view === "grants" ? <GrantsAdmin /> : <UsersAdmin />;
+}
+
+function UsersAdmin() {
   const view = resolveView(
     getModule("users"),
     useSearchParams().get("view"),
@@ -114,7 +124,7 @@ export function UsersAdmin() {
               <tr>
                 <Th className="pl-[15px]">Employee</Th>
                 <Th>Code</Th>
-                <Th>Role</Th>
+                <Th>Roles</Th>
                 <Th>Practices</Th>
                 <Th>Teams</Th>
                 <Th>Status</Th>
@@ -130,7 +140,27 @@ export function UsersAdmin() {
                     <p className="text-muted">{u.email}</p>
                   </Td>
                   <Td>{u.employee_code ?? "—"}</Td>
-                  <Td>{u.role.name}</Td>
+                  <Td>
+                    <p>{u.role.name}</p>
+                    {u.extra_roles.map((r) => (
+                      <p
+                        key={`${r.role.key}-${r.practice?.id ?? "all"}`}
+                        className="text-[11px] text-muted"
+                      >
+                        + {r.role.name}
+                        {r.practice ? ` (${r.practice.name})` : ""}
+                      </p>
+                    ))}
+                    {u.grants.map((g, i) => (
+                      <p
+                        key={`grant-${i}`}
+                        className="text-[11px] text-warn-ink"
+                      >
+                        + {g.permission}
+                        {g.practice ? ` (${g.practice.name})` : ""}
+                      </p>
+                    ))}
+                  </Td>
                   <Td>{u.practices.map((p) => p.name).join(", ") || "—"}</Td>
                   <Td>{u.teams.map((t) => t.name).join(", ") || "—"}</Td>
                   <Td>
@@ -209,6 +239,21 @@ function UserDialog({
     user?.practices.map((p) => p.id) ?? [],
   );
   const [teamIds, setTeamIds] = useState(user?.teams.map((t) => t.id) ?? []);
+  const startExtra: ExtraRole[] = (user?.extra_roles ?? []).map((r) => ({
+    role_key: r.role.key,
+    practice_id: r.practice?.id ?? "",
+  }));
+  const [extraRoles, setExtraRoles] = useState<ExtraRole[]>(startExtra);
+  const extraChanged =
+    JSON.stringify(extraRoles) !== JSON.stringify(startExtra);
+  const rolesBody = {
+    roles: extraRoles
+      .filter((r) => r.role_key)
+      .map((r) => ({
+        role_key: r.role_key,
+        practice_id: r.practice_id || null,
+      })),
+  };
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
@@ -229,7 +274,7 @@ function UserDialog({
   function save() {
     void run(async () => {
       if (isNew) {
-        await api("/users", {
+        const created = await api<User>("/users", {
           method: "POST",
           body: {
             email,
@@ -241,6 +286,12 @@ function UserDialog({
             team_ids: teamIds,
           },
         });
+        if (rolesBody.roles.length > 0) {
+          await api(`/users/${created.id}/roles`, {
+            method: "PUT",
+            body: rolesBody,
+          });
+        }
         return;
       }
       const changes: Record<string, unknown> = {};
@@ -252,6 +303,12 @@ function UserDialog({
       if (status !== user.status) changes.status = status;
       if (Object.keys(changes).length > 0)
         await api(`/users/${user.id}`, { method: "PATCH", body: changes });
+      if (extraChanged) {
+        await api(`/users/${user.id}/roles`, {
+          method: "PUT",
+          body: rolesBody,
+        });
+      }
       if (
         !sameIds(
           practiceIds,
@@ -381,7 +438,7 @@ function UserDialog({
           />
         </Field>
         <Field
-          label="Role"
+          label="Primary role"
           hint={isMe ? "You can’t change your own role." : undefined}
         >
           <select
@@ -417,6 +474,14 @@ function UserDialog({
             </select>
           </Field>
         )}
+        <FieldGroup label="Additional roles">
+          <ExtraRolesEditor
+            value={extraRoles}
+            onChange={setExtraRoles}
+            roles={roles.filter((r) => r.key !== "system_admin")}
+            practices={practices}
+          />
+        </FieldGroup>
         <FieldGroup label="Practices they can see">
           <CheckboxGrid
             items={practices}
@@ -436,5 +501,82 @@ function UserDialog({
       </fieldset>
       <FormError message={error} />
     </Dialog>
+  );
+}
+
+type ExtraRole = { role_key: string; practice_id: string };
+
+/**
+ * Roles on top of the primary one: for all the person's practices, or for one practice
+ * (e.g. Practice Manager / AR Lead in one practice, AR Associate everywhere else).
+ */
+function ExtraRolesEditor({
+  value,
+  onChange,
+  roles,
+  practices,
+}: {
+  value: ExtraRole[];
+  onChange: (rows: ExtraRole[]) => void;
+  roles: Role[];
+  practices: Practice[];
+}) {
+  const set = (index: number, patch: Partial<ExtraRole>) =>
+    onChange(value.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  return (
+    <div className="grid gap-2">
+      <p className="text-[11px] text-muted">
+        Use these when someone has a different role in one practice, or a second
+        job such as Claim Importer. A role for one practice applies in that
+        practice only; their primary role doesn’t extend there.
+      </p>
+      {value.map((row, index) => (
+        <div key={index} className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label={`Additional role ${index + 1}`}
+            className={cn(selectClass, "min-w-[220px] flex-1")}
+            value={row.role_key}
+            onChange={(e) => set(index, { role_key: e.target.value })}
+          >
+            <option value="">Choose a role…</option>
+            {roles.map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label={`Where additional role ${index + 1} applies`}
+            className={cn(selectClass, "min-w-[200px] flex-1")}
+            value={row.practice_id}
+            onChange={(e) => set(index, { practice_id: e.target.value })}
+          >
+            <option value="">In all their practices</option>
+            {practices.map((p) => (
+              <option key={p.id} value={p.id}>
+                Only in {p.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => onChange(value.filter((_, i) => i !== index))}
+            className="text-[11px] font-semibold text-danger-ink"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <div>
+        <Button
+          type="button"
+          onClick={() =>
+            onChange([...value, { role_key: "", practice_id: "" }])
+          }
+        >
+          Add a role
+        </Button>
+      </div>
+    </div>
   );
 }

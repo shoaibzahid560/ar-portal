@@ -1,9 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import ProgrammingError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import get_settings
+from app.core.refusals import record_refusal
+from app.core.schema_version import UPDATE_MESSAGE
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
 from app.modules.claims.router import router as claims_router
+from app.modules.grants.router import router as grants_router
 from app.modules.health.router import router as health_router
 from app.modules.lists.router import router as lists_router
 from app.modules.notifications.router import router as notifications_router
@@ -34,3 +41,21 @@ app.include_router(uploads_router, prefix="/api")
 app.include_router(claims_router, prefix="/api")
 app.include_router(lists_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
+app.include_router(grants_router, prefix="/api")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_errors(request: Request, exc: StarletteHTTPException):  # type: ignore[no-untyped-def]
+    """Every refused action (403) is written to the audit log; the response itself is unchanged."""
+    if exc.status_code == 403:
+        await record_refusal(request, str(exc.detail))
+    return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(ProgrammingError)
+async def database_behind(request: Request, exc: ProgrammingError):  # type: ignore[no-untyped-def]
+    """A missing table or column almost always means the database wasn't updated after new code arrived."""
+    message = str(exc.orig) if exc.orig else str(exc)
+    if "does not exist" in message:
+        return JSONResponse(status_code=503, content={"detail": UPDATE_MESSAGE})
+    raise exc

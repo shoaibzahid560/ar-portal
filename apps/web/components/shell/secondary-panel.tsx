@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import {
+  allowed,
   findModule,
   resolveView,
   viewHref,
@@ -33,8 +35,11 @@ function PanelContent({ navModule }: { navModule: NavModule }) {
     `${pathname}?${searchParams.toString()}`,
   );
   const [filter, setFilter] = useState("");
-  const views = navModule.views.filter((v) =>
-    v.label.toLowerCase().includes(filter.trim().toLowerCase()),
+  const { permissions } = useAuth();
+  const views = navModule.views.filter(
+    (v) =>
+      allowed(v.permission ?? null, permissions) &&
+      v.label.toLowerCase().includes(filter.trim().toLowerCase()),
   );
 
   return (

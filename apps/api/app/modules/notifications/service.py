@@ -12,11 +12,9 @@ from sqlalchemy import Text, func, literal, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access import users_with
 from app.modules.claims.models import Claim
 from app.modules.notifications.models import Notification
-from app.modules.practices.models import UserPractice
-from app.modules.roles.models import Role, RolePermission
-from app.modules.users.models import User
 
 
 def send(
@@ -37,28 +35,14 @@ def send(
         )
 
 
-async def _active_with_permission(db: AsyncSession, permission: str) -> set[uuid.UUID]:
-    rows = await db.scalars(
-        select(User.id)
-        .join(Role, Role.id == User.role_id)
-        .join(RolePermission, RolePermission.role_id == Role.id)
-        .where(RolePermission.permission_key == permission, User.status == "active")
-    )
-    return set(rows)
-
-
 async def oversight(db: AsyncSession) -> set[uuid.UUID]:
-    """Management and System Administrators (anyone holding notifications.oversight)."""
-    return await _active_with_permission(db, "notifications.oversight")
+    """Anyone holding notifications.oversight (Management, Organization Admin, Portal Owner by default)."""
+    return await users_with(db, "notifications.oversight")
 
 
 async def practice_reviewers(db: AsyncSession, practice_id: uuid.UUID) -> set[uuid.UUID]:
-    """People who resolve review items and work in this practice (AR Leads and Managers by default)."""
-    reviewers = await _active_with_permission(db, "claims.review")
-    members = set(
-        await db.scalars(select(UserPractice.user_id).where(UserPractice.practice_id == practice_id))
-    )
-    return reviewers & members
+    """People who resolve review items in this practice (Practice Managers and Operations Managers)."""
+    return await users_with(db, "claims.review", practice_id)
 
 
 async def create_followup_reminders(db: AsyncSession, user_id: uuid.UUID, today: date) -> None:

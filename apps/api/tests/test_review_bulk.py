@@ -1,4 +1,4 @@
-"""Bulk assignment and the review queue, against a real database, using the synthetic sample sheets."""
+"""Bulk assignment, decisions on uploaded lines before commit, and the older review queue."""
 
 import csv
 import io
@@ -9,7 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tests.auth_helpers import app_uses_test_database, browser_for
-from tests.db import migrate_fresh, requires_database, run_sql
+from tests.db import give_role, migrate_fresh, requires_database, run_sql
+from tests.upload_helpers import preview, upload_and_commit
 
 pytestmark = requires_database
 
@@ -46,6 +47,7 @@ def database() -> Iterator[None]:
         INSERT INTO ar.users (email, full_name, role_id)
         SELECT v.email, v.name, r.id
         FROM (VALUES ('{LEAD}', 'Lead', 'ar_lead'),
+                     ('approver@example.com', 'Approver', 'org_admin'),
                      ('{ASSOC}', 'Associate One', 'ar_associate'),
                      ('{ASSOC_2}', 'Associate Two', 'ar_associate'),
                      ('{OUTSIDER}', 'Outsider', 'ar_associate'),
@@ -61,16 +63,21 @@ def database() -> Iterator[None]:
         """,
     ):
         run_sql(statement, commit=True)
+    give_role(LEAD, "claim_importer")  # Practice Managers / AR Leads who upload also hold Claim Importer
     with app_uses_test_database():
         yield
 
 
-def upload(browser: TestClient, name: str, data: bytes) -> dict:
-    response = browser.post(
-        "/api/uploads", data={"practice_id": practice_id("Practice One")}, files={"file": (name, data)}
+def upload(monkeypatch: pytest.MonkeyPatch, name: str, data: bytes, decision: str = "create") -> dict:
+    """The lead uploads; a second person (an Organization Admin) decides open lines and commits."""
+    return upload_and_commit(
+        browser_for(monkeypatch, LEAD),
+        browser_for(monkeypatch, "approver@example.com"),
+        practice_id("Practice One"),
+        name,
+        data,
+        decision,
     )
-    assert response.status_code == 201, response.text
-    return response.json()
 
 
 def claim_ids(browser: TestClient, count: int, **params: str) -> list[str]:
@@ -94,7 +101,7 @@ def line_csv(rows: list[dict]) -> bytes:
 
 def test_lead_assigns_many_claims_at_once(monkeypatch: pytest.MonkeyPatch) -> None:
     lead = browser_for(monkeypatch, LEAD)
-    upload(lead, WEEK_1.name, WEEK_1.read_bytes())
+    upload(monkeypatch, WEEK_1.name, WEEK_1.read_bytes())
     ids = claim_ids(lead, 10, view="unassigned")
 
     result = lead.post("/api/claims/bulk-assign", json={"claim_ids": ids, "assigned_user_id": user_id(ASSOC)})
@@ -145,73 +152,124 @@ def test_an_associate_can_hand_several_claims_to_a_colleague(monkeypatch: pytest
     assert associate.get("/api/claims").json()["total"] == 8
 
 
-# ---- Review queue -----------------------------------------------------------------------------------------
+# ---- Decisions on uploaded lines, before anything is committed --------------------------------------
 
 
-def test_same_claim_updates_the_earlier_claim_and_folds_the_line_in(monkeypatch: pytest.MonkeyPatch) -> None:
-    lead = browser_for(monkeypatch, LEAD)
-    upload(lead, WEEK_2.name, WEEK_2.read_bytes())
-    [line_id] = claim_ids(lead, 5, view="needs-review")
-    line = lead.get(f"/api/claims/{line_id}").json()
-    assert line["can_review"] is True
+def test_a_changed_line_updates_the_existing_claim_and_is_recognised_next_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lead, approver = browser_for(monkeypatch, LEAD), browser_for(monkeypatch, "approver@example.com")
+    shown = preview(lead, practice_id("Practice One"), WEEK_2.name, WEEK_2.read_bytes())
+    [line] = approver.get(f"/api/uploads/{shown['id']}/rows", params={"show": "needs-decision"}).json()
+    earlier = next(
+        c
+        for c in line["candidates"]
+        if c["values"]["insurance_carrier"] == line["values"]["insurance_carrier"]
+    )
+    assert earlier["values"]["billed"] != line["values"]["billed"]
 
-    candidates = lead.get(f"/api/claims/{line_id}/matches").json()
-    assert candidates and all(c["id"] != line_id for c in candidates)
-    earlier = next(c for c in candidates if c["insurance_carrier"] == line["insurance_carrier"])
-    assert earlier["billed"] != line["billed"]
+    decided = approver.patch(
+        f"/api/uploads/{shown['id']}/rows/{line['id']}",
+        json={"decision": "update", "target_claim_id": earlier["id"]},
+    )
+    assert decided.json()["decided_by"] == "Approver"
+    lead.post(f"/api/uploads/{shown['id']}/submit")
+    committed = approver.post(f"/api/uploads/{shown['id']}/commit").json()
 
-    kept = lead.post(f"/api/claims/{line_id}/resolve", json={"decision": "same", "target_id": earlier["id"]})
+    assert (committed["created_claims"], committed["updated_claims"]) == (10, 1)
+    claim = approver.get(f"/api/claims/{earlier['id']}").json()
+    assert claim["billed"] == line["values"]["billed"]  # same claim, same ID, new amount
+    assert "claim.updated_from_upload" in {
+        e["action"] for e in approver.get(f"/api/claims/{earlier['id']}/history").json()
+    }
+    # The preview's patient values are cleared once the batch is committed.
+    assert all(r["values"] is None for r in approver.get(f"/api/uploads/{shown['id']}/rows").json())
 
-    assert kept.status_code == 200, kept.text
-    assert kept.json()["id"] == earlier["id"] and kept.json()["billed"] == line["billed"]
-    counts = lead.get("/api/claims/counts").json()
-    assert counts["needs-review"] == 0 and counts["merged"] == 1 and counts["all"] == 97
-    merged = lead.get(f"/api/claims/{line_id}").json()
-    assert merged["merged_into"]["id"] == earlier["id"] and merged["can_work"] is False
-    assert lead.patch(f"/api/claims/{line_id}", json={"claim_status": "Paid"}).status_code == 400
-    actions = {e["action"] for e in lead.get(f"/api/claims/{earlier['id']}/history").json()}
-    assert "claim.updated_from_upload" in actions
-
-    # The changed line appears again in a later sheet: it's recognised and skipped.
-    again = upload(lead, "week3.csv", line_csv([line]))
-    assert again["duplicate_rows"] == 1 and again["created_claims"] == 0
-
-
-def test_separate_claim_keeps_both(monkeypatch: pytest.MonkeyPatch) -> None:
-    lead = browser_for(monkeypatch, LEAD)
-    existing = lead.get(f"/api/claims/{claim_ids(lead, 1, view='unassigned')[0]}").json()
-    upload(lead, "second-line.csv", line_csv([{**existing, "billed": "999.99"}]))
-    [line_id] = claim_ids(lead, 5, view="needs-review")
-
-    result = lead.post(f"/api/claims/{line_id}/resolve", json={"decision": "separate"})
-
-    assert result.json()["needs_review"] is False
-    assert lead.get("/api/claims/counts").json()["needs-review"] == 0
-    assert lead.get(f"/api/claims/{line_id}").status_code == 200
+    again = preview(lead, practice_id("Practice One"), "week3.csv", line_csv([line["values"]]))
+    assert (again["duplicate_rows"], again["changed_rows"], again["new_rows"]) == (1, 0, 0)
+    lead.post(f"/api/uploads/{again['id']}/discard")
 
 
-def test_a_line_with_work_on_it_cannot_be_folded_in(monkeypatch: pytest.MonkeyPatch) -> None:
-    lead = browser_for(monkeypatch, LEAD)
-    existing = lead.get(f"/api/claims/{claim_ids(lead, 1, view='unassigned')[0]}").json()
-    upload(lead, "third-line.csv", line_csv([{**existing, "billed": "888.88"}]))
-    [line_id] = claim_ids(lead, 5, view="needs-review")
-    lead.patch(f"/api/claims/{line_id}", json={"assigned_user_id": user_id(ASSOC)})
+def test_create_and_skip_decisions(monkeypatch: pytest.MonkeyPatch) -> None:
+    lead, approver = browser_for(monkeypatch, LEAD), browser_for(monkeypatch, "approver@example.com")
+    first, second = (
+        approver.get(f"/api/claims/{i}").json() for i in claim_ids(approver, 2, view="unassigned")
+    )
+    before = approver.get("/api/claims").json()["total"]
+    sheet = line_csv([{**first, "billed": "999.99"}, {**second, "billed": "888.88"}])
+    shown = preview(lead, practice_id("Practice One"), "two-lines.csv", sheet)
+    create_row, skip_row = approver.get(f"/api/uploads/{shown['id']}/rows").json()
 
-    result = lead.post(
-        f"/api/claims/{line_id}/resolve", json={"decision": "same", "target_id": existing["id"]}
+    approver.patch(f"/api/uploads/{shown['id']}/rows/{create_row['id']}", json={"decision": "create"})
+    approver.patch(f"/api/uploads/{shown['id']}/rows/{skip_row['id']}", json={"decision": "skip"})
+    lead.post(f"/api/uploads/{shown['id']}/submit")
+    committed = approver.post(f"/api/uploads/{shown['id']}/commit").json()
+
+    assert (committed["created_claims"], committed["updated_claims"], committed["skipped_rows"]) == (1, 0, 1)
+    assert approver.get("/api/claims").json()["total"] == before + 1
+
+
+def test_commit_needs_every_decision_and_a_second_person(monkeypatch: pytest.MonkeyPatch) -> None:
+    lead, approver = browser_for(monkeypatch, LEAD), browser_for(monkeypatch, "approver@example.com")
+    existing = approver.get(f"/api/claims/{claim_ids(approver, 1, view='unassigned')[0]}").json()
+    shown = preview(
+        lead, practice_id("Practice One"), "open.csv", line_csv([{**existing, "billed": "777.77"}])
+    )
+    lead.post(f"/api/uploads/{shown['id']}/submit")
+
+    undecided = approver.post(f"/api/uploads/{shown['id']}/commit")
+    own = lead.post(f"/api/uploads/{shown['id']}/commit")
+    detail = approver.get(f"/api/uploads/{shown['id']}").json()
+
+    assert undecided.status_code == 400 and "need a decision" in undecided.json()["detail"]
+    assert own.status_code == 403
+    assert (
+        detail["actions"]["can_commit"] is False
+        and "need a decision" in detail["actions"]["commit_blocked_because"]
+    )
+    rejected = approver.post(f"/api/uploads/{shown['id']}/reject", json={"reason": "Wrong week's sheet"})
+    assert (
+        rejected.json()["status"] == "rejected" and rejected.json()["decision_reason"] == "Wrong week's sheet"
     )
 
-    assert result.status_code == 400 and "work recorded" in result.json()["detail"]
 
-
-def test_only_reviewers_can_resolve(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_only_reviewers_decide_lines(monkeypatch: pytest.MonkeyPatch) -> None:
     lead = browser_for(monkeypatch, LEAD)
-    [line_id] = claim_ids(lead, 5, view="needs-review")
+    existing = lead.get(f"/api/claims/{claim_ids(lead, 1, view='unassigned')[0]}").json()
+    shown = preview(
+        lead, practice_id("Practice One"), "check.csv", line_csv([{**existing, "billed": "666.66"}])
+    )
+    [row] = lead.get(f"/api/uploads/{shown['id']}/rows").json()
 
+    associate = browser_for(monkeypatch, ASSOC)
+    attempt = associate.patch(f"/api/uploads/{shown['id']}/rows/{row['id']}", json={"decision": "skip"})
+
+    assert attempt.status_code in (403, 404)
+    lead.post(f"/api/uploads/{shown['id']}/discard")
+
+
+# ---- The older review queue (lines flagged by uploads made before import approval) -----------------
+
+
+def test_older_flagged_lines_can_still_be_resolved(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Before import approval, a possible change was created as a claim flagged "needs review"."""
+    lead = browser_for(monkeypatch, LEAD)
+    [(earlier, later)] = run_sql(
+        "SELECT min(id::text), max(id::text) FROM ar.claims "
+        "WHERE merged_into_id IS NULL AND withdrawn_at IS NULL AND assigned_user_id IS NULL "
+        "GROUP BY patient_name, service_date, subscriber_id HAVING count(*) = 2 LIMIT 1"
+    )
+    run_sql(f"UPDATE ar.claims SET needs_review = true WHERE id = '{later}'", commit=True)
+
+    kept = lead.post(f"/api/claims/{later}/resolve", json={"decision": "same", "target_id": earlier})
+
+    assert kept.status_code == 200, kept.text
+    assert lead.get(f"/api/claims/{later}").json()["merged_into"]["id"] == earlier
     for email in (ASSOC, MANAGEMENT):
-        browser = browser_for(monkeypatch, email)
-        assert browser.post(f"/api/claims/{line_id}/resolve", json={"decision": "separate"}).status_code in (
+        assert browser_for(monkeypatch, email).post(
+            f"/api/claims/{later}/resolve", json={"decision": "separate"}
+        ).status_code in (
+            400,
             403,
             404,
         )
-        assert browser.patch(f"/api/claims/{line_id}", json={"needs_review": False}).status_code in (403, 404)

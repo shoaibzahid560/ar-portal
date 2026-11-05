@@ -27,6 +27,11 @@ export function claimStatusTone(status: string | null): Tone {
 
 export const UPLOAD_STATUSES = {
   processing: { label: "Processing", tone: "warn" },
-  completed: { label: "Completed", tone: "ok" },
+  preview: { label: "Preview: not submitted", tone: "info" },
+  submitted: { label: "Waiting for approval", tone: "warn" },
+  committed: { label: "Committed", tone: "ok" },
+  rejected: { label: "Turned down", tone: "neutral" },
+  discarded: { label: "Discarded", tone: "neutral" },
+  reversed: { label: "Reversed", tone: "danger" },
   failed: { label: "Failed", tone: "danger" },
 } as const satisfies Record<string, { label: string; tone: Tone }>;

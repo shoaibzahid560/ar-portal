@@ -19,7 +19,7 @@ export function ProfileMenu() {
   const close = useCallback(() => setOpen(false), []);
   useClickOutside(ref, close, open);
 
-  const { user, role } = useAuth();
+  const { user, role, extra_roles: extraRoles } = useAuth();
 
   return (
     <div ref={ref} className="relative">
@@ -41,6 +41,15 @@ export function ProfileMenu() {
               {user.email}
             </p>
             <p className="mt-1.5 text-[11px] text-[#8a94a3]">{role.name}</p>
+            {extraRoles.map((r) => (
+              <p
+                key={`${r.role.key}-${r.practice?.id ?? "all"}`}
+                className="text-[11px] text-[#8a94a3]"
+              >
+                + {r.role.name}
+                {r.practice ? ` in ${r.practice.name}` : ""}
+              </p>
+            ))}
           </div>
           <button
             type="button"

@@ -13,7 +13,7 @@ ar-portal/                Open this folder in VS Code; Git lives here
     ├── web/              Next.js app (npm commands run here)
     └── api/              FastAPI app (Python commands run here)
         ├── app/          The API, one folder per module
-        ├── migrations/   Database changes (Alembic): 0001 foundation ... 0004 notifications
+        ├── migrations/   Database changes (Alembic): 0001 foundation ... 0007 import approval
         └── tests/        Unit tests, and database tests that run in CI
 ```
 
@@ -25,6 +25,11 @@ ar-portal/                Open this folder in VS Code; Git lives here
 | M1 uploads and claims: AR sheet upload and validation, claims with the sheet's work fields and dropdowns, notes, EOB, history | Done |
 | Bulk assignment and the review queue (same claim / separate claim) | Done |
 | M5 notifications | Done |
+| Roles & Access specification, phase A: the specification's roles and default access, additional roles per person and per practice, team scope, Portal Owner protection, practice-scoped audit log | Done |
+| Phase B: additional grants (reason, approver, expiry, second-person approval and 90-day review for elevated grants) | Done |
+| Phase E: refused actions and error-report downloads in the audit log | Done |
+| Phase C: import preview and approval (preview, line decisions, second-person commit, turn down, discard, reverse, file-name check) | Done |
+| Phase D: claim lifecycle (close and reopen, priority, approving completion) | Next |
 | M6 reports and exports | Next |
 | Staging and production deploy (Vercel, Supabase) | Needs a company Google account and Vercel Pro |
 
@@ -59,6 +64,9 @@ cd apps\web; npm run dev
 ```
 
 Then open http://localhost:3000 (always port 3000; 8000 is the API behind it).
+
+After extracting an update that includes a new migration, always run `.venv\Scripts\alembic upgrade head`
+in `apps\api` before restarting. If you forget, the dashboard badge says "Database needs updating".
 
 ## Data safety
 

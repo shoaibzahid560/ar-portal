@@ -21,18 +21,35 @@ export function Dialog({
   footer?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Set while the dialog is hidden for a moment by the page, not closed by the person.
+  const pausing = useRef(false);
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
     if (open && !dialog.open) dialog.showModal();
     if (!open && dialog.open) dialog.close();
+    // Next.js keeps visited pages alive in the background. An open modal there would make the new page
+    // unclickable, so it's hidden when the page is left (and shown again on return), without counting
+    // as the person closing it.
+    return () => {
+      if (dialog.open) {
+        pausing.current = true;
+        dialog.close();
+      }
+    };
   }, [open]);
 
   return (
     <dialog
       ref={ref}
-      onClose={onClose}
+      onClose={() => {
+        if (pausing.current) {
+          pausing.current = false;
+          return;
+        }
+        onClose();
+      }}
       onCancel={(event) => {
         event.preventDefault();
         onClose();

@@ -47,12 +47,36 @@ export const ACTIONS: Record<string, { label: string; tone: Tone }> = {
     label: "Claim updated from a newer line",
     tone: "info",
   },
+  "upload.errors_downloaded": {
+    label: "Error report downloaded",
+    tone: "neutral",
+  },
+  "upload.previewed": { label: "Sheet uploaded for preview", tone: "info" },
+  "upload.line_decided": { label: "Uploaded line decided", tone: "info" },
+  "upload.submitted": { label: "Upload submitted for approval", tone: "warn" },
+  "upload.committed": { label: "Upload approved and committed", tone: "ok" },
+  "upload.rejected": { label: "Upload turned down", tone: "neutral" },
+  "upload.discarded": { label: "Upload discarded", tone: "neutral" },
+  "upload.reversed": { label: "Upload reversed", tone: "danger" },
+  "claim.withdrawn": {
+    label: "Claim withdrawn (upload reversed)",
+    tone: "danger",
+  },
+  "claim.update_reversed": { label: "Claim update reversed", tone: "warn" },
+  "access.refused": { label: "Action refused", tone: "danger" },
+  "user.roles_changed": { label: "Additional roles changed", tone: "warn" },
+  "grant.given": { label: "Permission given", tone: "warn" },
+  "grant.requested": { label: "Permission requested", tone: "warn" },
+  "grant.approved": { label: "Permission approved", tone: "warn" },
+  "grant.rejected": { label: "Permission turned down", tone: "neutral" },
+  "grant.revoked": { label: "Permission ended", tone: "neutral" },
+  "grant.reviewed": { label: "Permission reviewed", tone: "info" },
 };
 
 /** Which actions each Audit view shows. "admin" covers every change made through the admin screens. */
 const VIEW_ACTIONS: Record<string, string[]> = {
-  access: ["auth."],
-  admin: ["user.", "practice.", "team.", "role.", "list."],
+  access: ["auth.", "access."],
+  admin: ["user.", "practice.", "team.", "role.", "list.", "grant."],
   work: ["upload.", "claim."],
 };
 

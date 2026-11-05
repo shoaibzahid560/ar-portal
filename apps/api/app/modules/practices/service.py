@@ -27,6 +27,7 @@ async def practices_out(ctx: Ctx, practices: list[Practice]) -> list[PracticeOut
             name=p.name,
             status=p.status,
             notes=p.notes,
+            import_code=p.import_code,
             user_count=users.get(p.id, 0),
             team_count=teams.get(p.id, 0),
             created_at=p.created_at,
@@ -61,7 +62,9 @@ async def teams_out(ctx: Ctx, teams: list[Team]) -> list[TeamOut]:
 async def create_practice(ctx: Ctx, body: PracticeCreate) -> PracticeOut:
     if await repository.practice_name_taken(ctx.db, body.name):
         raise HTTPException(status.HTTP_409_CONFLICT, "A practice with this name already exists.")
-    practice = Practice(name=body.name, notes=body.notes)
+    practice = Practice(
+        name=body.name, notes=body.notes, import_code=(body.import_code or "").strip() or None
+    )
     ctx.db.add(practice)
     await ctx.db.flush()
     audit.record(
@@ -86,7 +89,11 @@ async def update_practice(ctx: Ctx, practice_id: uuid.UUID, body: PracticeUpdate
     after: dict[str, object] = {}
     for field in body.model_fields_set:
         new = getattr(body, field)
-        if new is None or new == getattr(practice, field):
+        if field == "import_code":
+            new = (new or "").strip() or None  # an empty code clears it
+        elif new is None:
+            continue
+        if new == getattr(practice, field):
             continue
         if field == "name" and await repository.practice_name_taken(ctx.db, new, except_id=practice.id):
             raise HTTPException(status.HTTP_409_CONFLICT, "A practice with this name already exists.")

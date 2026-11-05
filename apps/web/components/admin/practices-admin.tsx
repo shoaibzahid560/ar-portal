@@ -136,6 +136,7 @@ function PracticeDialog({
 }) {
   const [name, setName] = useState(practice?.name ?? "");
   const [notes, setNotes] = useState(practice?.notes ?? "");
+  const [importCode, setImportCode] = useState(practice?.import_code ?? "");
   const [status, setStatus] = useState(practice?.status ?? "active");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -145,11 +146,16 @@ function PracticeDialog({
     setError(null);
     try {
       if (practice === null) {
-        await api("/practices", { method: "POST", body: { name, notes } });
+        await api("/practices", {
+          method: "POST",
+          body: { name, notes, import_code: importCode || null },
+        });
       } else {
         const changes: Record<string, string> = {};
         if (name !== practice.name) changes.name = name;
         if (notes !== practice.notes) changes.notes = notes;
+        if (importCode !== (practice.import_code ?? ""))
+          changes.import_code = importCode;
         if (status !== practice.status) changes.status = status;
         if (Object.keys(changes).length > 0) {
           await api(`/practices/${practice.id}`, {
@@ -212,6 +218,17 @@ function PracticeDialog({
             </select>
           </Field>
         )}
+        <Field
+          label="File name code"
+          hint="How this practice’s AR sheets are named, e.g. Irie_Dental. Uploads warn when a file seems to belong to another practice. Leave empty to use the practice name."
+        >
+          <input
+            className={cn(inputClass, "w-full")}
+            value={importCode}
+            maxLength={60}
+            onChange={(e) => setImportCode(e.target.value)}
+          />
+        </Field>
         <Field label="Notes" wide>
           <textarea
             className={cn(inputClass, "h-auto min-h-24 w-full py-2")}

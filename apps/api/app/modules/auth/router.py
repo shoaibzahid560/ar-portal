@@ -7,7 +7,8 @@ from app.core.db import DbSession
 from app.core.schemas import NamedRef, RoleRef
 from app.core.security import new_token
 from app.modules.auth import google, repository, service
-from app.modules.auth.schemas import MeResponse, MeUser
+from app.modules.auth.schemas import MeExtraRole, MeResponse, MeUser
+from app.modules.users.repository import extra_roles_for
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -98,6 +99,15 @@ async def me(ctx: CurrentCtx) -> MeResponse:
     return MeResponse(
         user=MeUser.model_validate(ctx.user, from_attributes=True),
         role=RoleRef(key=ctx.role.key, name=ctx.role.name),
+        extra_roles=[
+            MeExtraRole(
+                role=RoleRef(key=key, name=name),
+                practice=NamedRef(id=practice_id, name=practice_name) if practice_id else None,
+            )
+            for key, name, practice_id, practice_name in (await extra_roles_for(ctx.db, [ctx.user.id])).get(
+                ctx.user.id, []
+            )
+        ],
         permissions=sorted(ctx.permissions),
         practices=[NamedRef(id=p.id, name=p.name) for p in practices],
         teams=[NamedRef(id=t.id, name=t.name) for t in teams],

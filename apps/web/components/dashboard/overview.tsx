@@ -16,14 +16,20 @@ import { useApi } from "@/lib/use-api";
 
 /** Real numbers, each limited to what the signed-in person may see. */
 export function DashboardOverview() {
-  const { permissions, role } = useAuth();
-  const canClaims = permissions.includes("claims.view");
+  const { permissions } = useAuth();
+  const canClaims = [
+    "claims.view",
+    "claims.view_team",
+    "claims.view_practice",
+  ].some((p) => permissions.includes(p));
   const canUploads = permissions.includes("uploads.view");
   const canAudit = permissions.includes("audit.view");
   const summary = useApi<ClaimSummary>(canClaims ? "/claims/summary" : null);
   const uploads = useApi<Upload[]>(canUploads ? "/uploads?limit=5" : null);
   const activity = useApi<AuditPage>(canAudit ? "/audit-events?limit=8" : null);
-  const own = role.key === "ar_associate";
+  const own =
+    !permissions.includes("claims.view_practice") &&
+    !permissions.includes("claims.view_team");
 
   if (!canClaims) {
     return (

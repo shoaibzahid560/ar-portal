@@ -2,13 +2,12 @@ import uuid
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy import case, func, select
 
 from app.core.clock import business_today
 from app.core.context import Ctx, require
-from app.core.scope import get_scope
 from app.modules.audit.enrich import enrich
 from app.modules.audit.models import AuditEvent
 from app.modules.audit.schemas import AuditEventOut
@@ -31,8 +30,11 @@ from app.modules.users.models import User
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 
-CanView = Annotated[Ctx, Depends(require("claims.view"))]
+CanView = Annotated[Ctx, Depends(require("claims.view", "claims.view_team", "claims.view_practice"))]
 CanWork = Annotated[Ctx, Depends(require("claims.work"))]
+CanAssign = Annotated[Ctx, Depends(require("claims.assign"))]
+# Changing a claim covers work fields, assignment and the review flag; each is checked per practice.
+CanChange = Annotated[Ctx, Depends(require("claims.work", "claims.assign", "claims.review"))]
 CanReview = Annotated[Ctx, Depends(require("claims.review"))]
 VIEWS: tuple[ClaimView, ...] = (
     "all",
@@ -57,7 +59,7 @@ async def list_claims(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ClaimPage:
     """Claims the caller may see. AR Associates only ever see claims assigned to them."""
-    statement = repository.visible(select(Claim), ctx, await get_scope(ctx))
+    statement = repository.visible(select(Claim), ctx)
     if view != "merged":
         statement = repository.active(statement)
     statement = repository.apply_view(statement, view, ctx, business_today())
@@ -71,15 +73,13 @@ async def list_claims(
 @router.get("/counts", response_model=dict[str, int])
 async def claim_counts(ctx: CanView) -> dict[str, int]:
     """How many claims are in each view, for the badges in the side panel."""
-    base = repository.active(repository.visible(select(Claim.id), ctx, await get_scope(ctx)))
+    base = repository.active(repository.visible(select(Claim.id), ctx))
     today = business_today()
     counts = {}
     for view in VIEWS:
         statement = repository.apply_view(base, view, ctx, today)
         counts[view] = await ctx.db.scalar(select(func.count()).select_from(statement.subquery())) or 0
-    merged = repository.apply_view(
-        repository.visible(select(Claim.id), ctx, await get_scope(ctx)), "merged", ctx, today
-    )
+    merged = repository.apply_view(repository.visible(select(Claim.id), ctx), "merged", ctx, today)
     counts["merged"] = await ctx.db.scalar(select(func.count()).select_from(merged.subquery())) or 0
     counts["open"] = counts["needs-review"]  # the Review screen's own view name
     return counts
@@ -88,7 +88,7 @@ async def claim_counts(ctx: CanView) -> dict[str, int]:
 @router.get("/summary", response_model=ClaimSummary)
 async def claim_summary(ctx: CanView) -> ClaimSummary:
     """Numbers for the dashboard, within the caller's scope."""
-    visible = repository.active(repository.visible(select(Claim), ctx, await get_scope(ctx))).subquery()
+    visible = repository.active(repository.visible(select(Claim), ctx)).subquery()
     today = business_today()
     totals = (
         await ctx.db.execute(
@@ -121,15 +121,15 @@ async def claim_summary(ctx: CanView) -> ClaimSummary:
 
 @router.get("/assignees", response_model=list[Assignee])
 async def assignees_for_practices(
-    ctx: CanWork, practice_id: Annotated[list[uuid.UUID], Query(min_length=1, max_length=50)]
+    ctx: CanAssign, practice_id: Annotated[list[uuid.UUID], Query(min_length=1, max_length=50)]
 ) -> list[Assignee]:
     """For bulk assignment: people who are active AR staff of every given practice."""
-    people = await service.assignable_for(ctx, await get_scope(ctx), set(practice_id))
+    people = await service.assignable_for(ctx, set(practice_id))
     return [Assignee(id=i, name=n, role=r) for i, n, r in people]
 
 
 @router.post("/bulk-assign", response_model=BulkResult)
-async def bulk_assign(ctx: CanWork, body: BulkAssign) -> BulkResult:
+async def bulk_assign(ctx: CanAssign, body: BulkAssign) -> BulkResult:
     """Assign (or unassign) up to 500 claims at once. Each claim's history records the change."""
     return BulkResult(updated=await service.bulk_assign(ctx, body.claim_ids, body.assigned_user_id))
 
@@ -140,7 +140,7 @@ async def get_claim(ctx: CanView, claim_id: uuid.UUID) -> ClaimDetail:
 
 
 @router.patch("/{claim_id}", response_model=ClaimDetail)
-async def update_claim(ctx: CanWork, claim_id: uuid.UUID, body: ClaimUpdate) -> ClaimDetail:
+async def update_claim(ctx: CanChange, claim_id: uuid.UUID, body: ClaimUpdate) -> ClaimDetail:
     """Fill in the work fields, or change who the claim is assigned to."""
     return await service.update(ctx, claim_id, body)
 
@@ -167,9 +167,11 @@ async def download_eob(ctx: CanView, claim_id: uuid.UUID) -> Response:
 
 
 @router.get("/{claim_id}/assignees", response_model=list[Assignee])
-async def assignees(ctx: CanWork, claim_id: uuid.UUID) -> list[Assignee]:
-    """Who this claim can be assigned to: active AR staff with access to its practice."""
+async def assignees(ctx: CanAssign, claim_id: uuid.UUID) -> list[Assignee]:
+    """Who this claim can be assigned to: active people who can receive claims in its practice."""
     claim = await service.load_visible(ctx, claim_id)
+    if not ctx.access.has("claims.assign", claim.practice_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Permission required in this practice: claims.assign")
     return [
         Assignee(id=i, name=n, role=r) for i, n, r in await repository.assignees(ctx.db, claim.practice_id)
     ]

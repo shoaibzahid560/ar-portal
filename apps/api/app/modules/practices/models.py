@@ -18,6 +18,9 @@ class Practice(Timestamps, Base):
     name: Mapped[str] = mapped_column(Text, unique=True)
     status: Mapped[str] = mapped_column(Text, server_default="active")
     notes: Mapped[str] = mapped_column(Text, server_default="")
+    # How this practice's AR sheets are named, e.g. "Irie_Dental". Used to warn when a file is uploaded
+    # to the wrong practice.
+    import_code: Mapped[str | None] = mapped_column(Text)
 
 
 class Team(Timestamps, Base):

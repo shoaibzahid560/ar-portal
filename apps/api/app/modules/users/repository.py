@@ -9,7 +9,7 @@ from app.core.schemas import NamedRef
 from app.core.scope import Scope
 from app.modules.auth.models import UserSession
 from app.modules.practices.models import Practice, Team, TeamMember, UserPractice
-from app.modules.roles.models import Role
+from app.modules.roles.models import Role, RolePermission, UserRole
 from app.modules.users.models import User
 
 
@@ -122,3 +122,58 @@ async def revoke_all_sessions(db: AsyncSession, user_id: uuid.UUID) -> None:
         .where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
         .values(revoked_at=func.now())
     )
+
+
+async def extra_roles_for(db: AsyncSession, user_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[tuple]]:
+    """(role key, role name, practice id, practice name) for each additional role, per user."""
+    result: dict[uuid.UUID, list[tuple]] = defaultdict(list)
+    rows = await db.execute(
+        select(UserRole.user_id, Role.key, Role.name, Practice.id, Practice.name)
+        .join(Role, Role.id == UserRole.role_id)
+        .outerjoin(Practice, Practice.id == UserRole.practice_id)
+        .where(UserRole.user_id.in_(user_ids))
+        .order_by(Role.name, Practice.name)
+    )
+    for user_id, key, name, practice_id, practice_name in rows:
+        result[user_id].append((key, name, practice_id, practice_name))
+    return result
+
+
+async def role_permissions(db: AsyncSession, role_id: int) -> set[str]:
+    return set(
+        await db.scalars(select(RolePermission.permission_key).where(RolePermission.role_id == role_id))
+    )
+
+
+async def replace_extra_roles(
+    db: AsyncSession, user_id: uuid.UUID, assignments: set[tuple[int, uuid.UUID | None]]
+) -> None:
+    await db.execute(delete(UserRole).where(UserRole.user_id == user_id))
+    db.add_all(
+        UserRole(user_id=user_id, role_id=role_id, practice_id=practice_id)
+        for role_id, practice_id in assignments
+    )
+
+
+async def add_practices(db: AsyncSession, user_id: uuid.UUID, practice_ids: set[uuid.UUID]) -> None:
+    """Adds practice membership without removing any."""
+    current = set(await db.scalars(select(UserPractice.practice_id).where(UserPractice.user_id == user_id)))
+    db.add_all(UserPractice(user_id=user_id, practice_id=p) for p in practice_ids - current)
+
+
+async def grants_for(db: AsyncSession, user_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[tuple]]:
+    """(permission description, practice id, practice name) for each active grant, per user."""
+    from app.core.access import active_grant
+    from app.modules.grants.models import PermissionGrant
+    from app.modules.roles.models import Permission
+
+    result: dict[uuid.UUID, list[tuple]] = defaultdict(list)
+    rows = await db.execute(
+        select(PermissionGrant.user_id, Permission.description, Practice.id, Practice.name)
+        .join(Permission, Permission.key == PermissionGrant.permission_key)
+        .outerjoin(Practice, Practice.id == PermissionGrant.practice_id)
+        .where(PermissionGrant.user_id.in_(user_ids), active_grant())
+    )
+    for user_id, description, practice_id, practice_name in rows:
+        result[user_id].append((description, practice_id, practice_name))
+    return result
