@@ -4,7 +4,7 @@ The database version this code expects. Update it with every new migration. When
 with a long database error.
 """
 
-SCHEMA_VERSION = "0008"
+SCHEMA_VERSION = "0010"
 UPDATE_MESSAGE = (
     "The database needs updating for this version of the portal. "
     "In apps/api run: .venv\\Scripts\\alembic upgrade head, then restart the API."

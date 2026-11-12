@@ -33,6 +33,7 @@ ELEVATED = frozenset(
         "roles.manage",
         "grants.manage",
         "grants.approve",
+        "reports.staff",  # staff-level reports (specification, section 4)
     }
 )
 REVIEW_EVERY = timedelta(days=90)
@@ -176,6 +177,10 @@ async def create(ctx: Ctx, body: GrantCreate) -> GrantOut:
     person = await ctx.db.get(User, body.user_id)
     if person is None or person.status != "active":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Grants can only be given to active people.")
+    if person.client_org_id is not None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Client accounts can't be given internal permissions."
+        )
     if await ctx.db.scalar(select(Permission.key).where(Permission.key == body.permission)) is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown permission.")
     if body.practice_id is not None and await ctx.db.get(Practice, body.practice_id) is None:

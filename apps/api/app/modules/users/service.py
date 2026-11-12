@@ -97,7 +97,14 @@ async def _guard_target(ctx: Ctx, user: User) -> None:
         _guard_owner(ctx)
 
 
+CLIENT_ROLES = frozenset({"client_admin", "client_user"})
+
+
 async def _guard_role(ctx: Ctx, role_id: int, role_key: str) -> None:
+    if role_key in CLIENT_ROLES:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Client roles are given under Clients, to client accounts."
+        )
     if role_key == OWNER_ROLE:
         _guard_owner(ctx)
     elif await repository.role_permissions(ctx.db, role_id) & ELEVATED and not ctx.access.all_practices:

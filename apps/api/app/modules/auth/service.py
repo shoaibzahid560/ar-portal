@@ -46,12 +46,23 @@ async def sign_in(
     """
     settings = get_settings()
     reason: DenialReason | None = None
+    user = None
     if not identity.email_verified:
         reason = DenialReason.DOMAIN
-    elif settings.allowed_google_domain and identity.hosted_domain != settings.allowed_google_domain:
-        reason = DenialReason.DOMAIN
+    else:
+        user = await repository.get_user_by_email(db, identity.email)
+        # Client accounts sign in with their own Google accounts (invitation only): the company-domain
+        # rule applies to everyone else.
+        is_client = user is not None and user.client_org_id is not None
+        if (
+            not is_client
+            and settings.allowed_google_domain
+            and identity.hosted_domain != settings.allowed_google_domain
+        ):
+            reason, user = DenialReason.DOMAIN, None
+        elif is_client and not await _client_org_active(db, user.client_org_id):
+            reason = DenialReason.NOT_REGISTERED
 
-    user = None if reason else await repository.get_user_by_email(db, identity.email)
     if reason is None and (user is None or user.status != "active"):
         reason = DenialReason.NOT_REGISTERED
 
@@ -121,3 +132,10 @@ async def sign_out(db: AsyncSession, active: ActiveSession) -> None:
         db, action="auth.logout", entity_type="user", entity_id=active.user.id, actor_user_id=active.user.id
     )
     await db.commit()
+
+
+async def _client_org_active(db: AsyncSession, org_id: object) -> bool:
+    from app.modules.clients.models import ClientOrganisation
+
+    org = await db.get(ClientOrganisation, org_id)
+    return org is not None and org.status == "active"

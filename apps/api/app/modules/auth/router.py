@@ -23,11 +23,13 @@ def _login_error(reason: str) -> RedirectResponse:
 
 
 @router.get("/google/login")
-async def google_login() -> RedirectResponse:
-    """Public. Sends the browser to Google's account chooser."""
+async def google_login(client: bool = False) -> RedirectResponse:
+    """Public. Sends the browser to Google's account chooser (?client=true for client staff)."""
     settings = get_settings()
     state, verifier = new_token(), new_token()
-    response = RedirectResponse(google.authorization_url(state, verifier), status_code=303)
+    response = RedirectResponse(
+        google.authorization_url(state, verifier, company=not client), status_code=303
+    )
     response.set_cookie(
         OAUTH_COOKIE,
         f"{state}.{verifier}",
@@ -108,7 +110,19 @@ async def me(ctx: CurrentCtx) -> MeResponse:
                 ctx.user.id, []
             )
         ],
-        permissions=sorted(ctx.permissions),
+        permissions=sorted(await _effective(ctx)),
         practices=[NamedRef(id=p.id, name=p.name) for p in practices],
         teams=[NamedRef(id=t.id, name=t.name) for t in teams],
     )
+
+
+async def _effective(ctx: CurrentCtx) -> set[str]:
+    """What the screens should offer. A client admin's user management only counts once delegated."""
+    held = set(ctx.permissions)
+    if ctx.user.client_org_id is not None and "client_users.manage" in held:
+        from app.modules.clients.models import ClientOrganisation
+
+        org = await ctx.db.get(ClientOrganisation, ctx.user.client_org_id)
+        if org is None or not org.users_delegated:
+            held.discard("client_users.manage")
+    return held

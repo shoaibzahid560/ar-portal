@@ -10,11 +10,14 @@ from app.core.schema_version import UPDATE_MESSAGE
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
 from app.modules.claims.router import router as claims_router
+from app.modules.clients.router import portal as client_portal_router
+from app.modules.clients.router import router as clients_router
 from app.modules.grants.router import router as grants_router
 from app.modules.health.router import router as health_router
 from app.modules.lists.router import router as lists_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.practices.router import router as practices_router
+from app.modules.reports.router import router as reports_router
 from app.modules.roles.router import router as roles_router
 from app.modules.uploads.router import router as uploads_router
 from app.modules.users.router import router as users_router
@@ -42,6 +45,9 @@ app.include_router(claims_router, prefix="/api")
 app.include_router(lists_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
 app.include_router(grants_router, prefix="/api")
+app.include_router(reports_router, prefix="/api")
+app.include_router(clients_router, prefix="/api")
+app.include_router(client_portal_router, prefix="/api")
 
 
 @app.exception_handler(StarletteHTTPException)

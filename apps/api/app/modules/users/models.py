@@ -26,3 +26,7 @@ class User(Timestamps, Base):
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id", ondelete="RESTRICT"), index=True)
     status: Mapped[str] = mapped_column(Text, server_default="active")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set for client accounts (Client Reporting Admin and User): the one client organisation they belong to.
+    client_org_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("client_organisations.id", ondelete="RESTRICT"), index=True
+    )

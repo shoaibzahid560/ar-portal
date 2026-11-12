@@ -15,6 +15,8 @@ class Storage(Protocol):
 
     def read(self, key: str) -> bytes: ...
 
+    def delete(self, key: str) -> None: ...
+
 
 class LocalStorage:
     def __init__(self, root: str) -> None:
@@ -33,6 +35,9 @@ class LocalStorage:
 
     def read(self, key: str) -> bytes:
         return self._path(key).read_bytes()
+
+    def delete(self, key: str) -> None:
+        self._path(key).unlink(missing_ok=True)
 
 
 def get_storage() -> Storage:

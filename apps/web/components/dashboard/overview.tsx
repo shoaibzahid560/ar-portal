@@ -1,5 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
 import Link from "next/link";
 import { ACTIONS } from "@/components/admin/audit-log";
 import { ActivityList } from "@/components/data/activity-list";
@@ -17,6 +20,14 @@ import { useApi } from "@/lib/use-api";
 /** Real numbers, each limited to what the signed-in person may see. */
 export function DashboardOverview() {
   const { permissions } = useAuth();
+  const router = useRouter();
+  const clientAccount =
+    permissions.includes("client_reports.view") &&
+    !permissions.includes("dashboard.view");
+  // Client accounts have no internal dashboard: everyone lands on /dashboard after sign-in, clients move on.
+  useEffect(() => {
+    if (clientAccount) router.replace("/client-reports");
+  }, [clientAccount, router]);
   const canClaims = [
     "claims.view",
     "claims.view_team",

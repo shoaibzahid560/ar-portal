@@ -72,6 +72,27 @@ export const ACTIONS: Record<string, { label: string; tone: Tone }> = {
   "claim.continued": { label: "Claim sent back to continue", tone: "info" },
   "claim.reopened": { label: "Claim reopened", tone: "warn" },
   "claim.prioritized": { label: "Claim priority changed", tone: "info" },
+  "report.viewed": { label: "Report run", tone: "neutral" },
+  "report.exported": { label: "Report file generated", tone: "warn" },
+  "report.downloaded": { label: "Report file downloaded", tone: "warn" },
+  "settings.changed": { label: "Settings changed", tone: "warn" },
+  "client.created": { label: "Client organisation created", tone: "info" },
+  "client.changed": { label: "Client organisation changed", tone: "warn" },
+  "client.user_created": { label: "Client account added", tone: "warn" },
+  "client.user_changed": { label: "Client account changed", tone: "info" },
+  "client.user_deactivated": {
+    label: "Client account deactivated",
+    tone: "neutral",
+  },
+  "client_report.viewed": { label: "Client report run", tone: "neutral" },
+  "client_report.exported": {
+    label: "Client report file generated",
+    tone: "warn",
+  },
+  "client_report.downloaded": {
+    label: "Client report file downloaded",
+    tone: "warn",
+  },
   "access.refused": { label: "Action refused", tone: "danger" },
   "user.roles_changed": { label: "Additional roles changed", tone: "warn" },
   "grant.given": { label: "Permission given", tone: "warn" },
@@ -85,7 +106,16 @@ export const ACTIONS: Record<string, { label: string; tone: Tone }> = {
 /** Which actions each Audit view shows. "admin" covers every change made through the admin screens. */
 const VIEW_ACTIONS: Record<string, string[]> = {
   access: ["auth.", "access."],
-  admin: ["user.", "practice.", "team.", "role.", "list.", "grant."],
+  admin: [
+    "user.",
+    "practice.",
+    "team.",
+    "role.",
+    "list.",
+    "grant.",
+    "settings.",
+  ],
+  reports: ["report."],
   work: ["upload.", "claim."],
 };
 

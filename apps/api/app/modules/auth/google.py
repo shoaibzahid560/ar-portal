@@ -30,7 +30,9 @@ class GoogleIdentity:
     name: str
 
 
-def authorization_url(state: str, code_verifier: str) -> str:
+def authorization_url(state: str, code_verifier: str, *, company: bool = True) -> str:
+    """`company=False` is the client sign-in: no company-domain hint, so client staff can pick their own
+    Google account. Who may get in is still decided in auth.service.sign_in."""
     settings = get_settings()
     params = {
         "client_id": settings.google_client_id,
@@ -42,7 +44,7 @@ def authorization_url(state: str, code_verifier: str) -> str:
         "code_challenge_method": "S256",
         "prompt": "select_account",
     }
-    if settings.allowed_google_domain:
+    if settings.allowed_google_domain and company:
         # Only a hint to Google's account chooser; the domain is checked again in identity_from_claims.
         params["hd"] = settings.allowed_google_domain
     return f"{AUTHORIZE_URL}?{urlencode(params)}"

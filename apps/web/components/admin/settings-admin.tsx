@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/data/empty-state";
 import { Panel } from "@/components/data/panel";
 import { getModule, resolveView } from "@/lib/navigation";
 import { ListsEditor } from "./lists-editor";
+import { ReportTargetsForm } from "./report-targets";
 import { RolesMatrix } from "./roles-matrix";
 
 export function SettingsAdmin() {
@@ -14,6 +15,7 @@ export function SettingsAdmin() {
   ).slug;
   if (view === "roles") return <RolesMatrix />;
   if (view === "lists") return <ListsEditor />;
+  if (view === "targets") return <ReportTargetsForm />;
   return (
     <Panel>
       <EmptyState

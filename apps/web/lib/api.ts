@@ -358,3 +358,143 @@ export type GrantablePermission = {
 };
 
 export type Priority = "low" | "normal" | "high" | "urgent";
+
+// ---- Reports (M6) ----
+export type ColumnKind =
+  "text" | "date" | "datetime" | "money" | "int" | "percent";
+export type ReportColumn = { key: string; label: string; kind: ColumnKind };
+export type ReportFilters = {
+  date_from?: string;
+  date_to?: string;
+  practice_ids?: string[];
+  payer?: string;
+  claim_statuses?: string[];
+  work_states?: ("open" | "pending_completion" | "closed")[];
+  assigned_user_id?: string;
+  team_id?: string;
+  upload_id?: string;
+  aging_buckets?: string[];
+  priorities?: Priority[];
+};
+export type CatalogueItem = {
+  key: string;
+  title: string;
+  description: string;
+  date_basis: string;
+  filters: string[];
+  contains_phi: boolean;
+  staff: boolean;
+};
+export type ReportRun = {
+  key: string;
+  title: string;
+  period: string;
+  filters_label: string[];
+  scope: string[];
+  generated_at: string;
+  columns: ReportColumn[];
+  rows: Record<string, string | number | null>[];
+  row_count: number;
+  shown: number;
+  totals: Record<string, string | number | null>;
+  notes: string[];
+  contains_phi: boolean;
+};
+export type ReportExport = {
+  id: string;
+  number: string;
+  report_key: string;
+  report_title: string;
+  format: "csv" | "xlsx" | "pdf";
+  file_name: string;
+  file_size: number;
+  row_count: number;
+  filters_label: string[];
+  scope: string[];
+  contains_phi: boolean;
+  requested_by: NamedRef;
+  created_at: string;
+  expires_at: string;
+  expired: boolean;
+  download_count: number;
+  last_downloaded_at: string | null;
+  can_download: boolean;
+};
+export type ReportTargets = {
+  claims_worked_per_day: number;
+  first_pass_quality_pct: number;
+  overdue_followups_per_person: number;
+  aging_over_90_pct: number;
+  export_retention_days: number;
+};
+export type ReportBar = {
+  label: string;
+  count: number;
+  amount: string;
+  secondary: number;
+};
+export type ReportOverview = {
+  open_claims: number;
+  open_billed: string;
+  open_unrecovered: string;
+  recovered_total: string;
+  recovered_this_month: string;
+  due_today: number;
+  overdue: number;
+  awaiting_completion: number;
+  closed_this_month: number;
+  over_90_pct: number;
+  aging: ReportBar[];
+  by_status: ReportBar[];
+  by_practice: ReportBar[];
+  recovered_by_month: ReportBar[];
+  workload: ReportBar[] | null;
+  alerts: {
+    tone: "warn" | "danger" | "info";
+    text: string;
+    link: string | null;
+  }[];
+  targets: ReportTargets;
+};
+
+// ---- Client reporting ----
+export type ClientOrg = {
+  id: string;
+  name: string;
+  status: "active" | "paused";
+  notes: string;
+  patient_detail: boolean;
+  users_delegated: boolean;
+  practices: NamedRef[];
+  reports: string[];
+  user_count: number;
+  created_at: string;
+};
+export type ClientUser = {
+  id: string;
+  email: string;
+  full_name: string;
+  role: RoleRef;
+  status: "active" | "paused" | "deactivated";
+  practices: NamedRef[];
+  last_login_at: string | null;
+};
+export type ClientCatalogueItem = {
+  key: string;
+  title: string;
+  description: string;
+  date_basis: string;
+  contains_phi: boolean;
+};
+export type ClientContext = {
+  organisation: NamedRef;
+  practices: NamedRef[];
+  patient_detail: boolean;
+  users_delegated: boolean;
+  can_manage_users: boolean;
+};
+export const CLIENT_REPORTS: Record<string, string> = {
+  statement: "AR statement",
+  aging: "Aging summary",
+  recovery: "Recovery summary",
+};

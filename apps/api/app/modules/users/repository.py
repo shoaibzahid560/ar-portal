@@ -14,7 +14,11 @@ from app.modules.users.models import User
 
 
 def _scoped(statement: Select, scope: Scope, viewer_id: uuid.UUID) -> Select:
-    """Limits a user query to people who share a practice or team with the viewer (plus themselves)."""
+    """
+    Limits a user query to people who share a practice or team with the viewer (plus themselves). Client
+    accounts are never included: they are managed under Clients.
+    """
+    statement = statement.where(User.client_org_id.is_(None))
     if scope.company_wide:
         return statement
     in_my_practices = select(UserPractice.user_id).where(UserPractice.practice_id.in_(scope.practice_ids))

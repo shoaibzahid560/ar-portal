@@ -10,6 +10,11 @@ from tests.db import run_sql as _run
 pytestmark = requires_database
 
 EXPECTED_TABLES = {
+    "client_org_practices",
+    "client_org_reports",
+    "client_organisations",
+    "app_settings",
+    "report_exports",
     "alembic_version",
     "audit_events",
     "claim_notes",
@@ -56,6 +61,8 @@ def test_the_specifications_roles_are_seeded() -> None:
         "claim_importer": "Claim Importer",
         "ar_associate": "AR Associate",
         "management": "Management (company-wide view)",
+        "client_admin": "Client Reporting Admin",
+        "client_user": "Client Reporting User",
     }
 
 
@@ -68,7 +75,9 @@ def test_default_access_follows_the_specification() -> None:
         return {key for (key,) in rows}
 
     every = {key for (key,) in _run("SELECT key FROM ar.permissions")}
-    assert permissions("system_admin") == every - {"claims.receive"}  # the owner isn't assigned claims
+    client_branch = {"client_reports.view", "client_reports.download", "client_users.manage"}
+    # The owner isn't assigned claims, and client-account permissions belong to client roles only.
+    assert permissions("system_admin") == every - {"claims.receive"} - client_branch
     assert permissions("ar_associate") == {
         "dashboard.view",
         "claims.view",

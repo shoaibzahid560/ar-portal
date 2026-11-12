@@ -5,7 +5,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: APP_NAME, template: `%s | ${APP_NAME}` },
-  description: "Claim uploads, assignments, follow-ups, audit trail and reporting.",
+  description:
+    "Claim uploads, assignments, follow-ups, audit trail and reporting.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
