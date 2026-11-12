@@ -54,11 +54,7 @@ async def sign_in(
         # Client accounts sign in with their own Google accounts (invitation only): the company-domain
         # rule applies to everyone else.
         is_client = user is not None and user.client_org_id is not None
-        if (
-            not is_client
-            and settings.allowed_google_domain
-            and identity.hosted_domain != settings.allowed_google_domain
-        ):
+        if not is_client and settings.company_domain and identity.hosted_domain != settings.company_domain:
             reason, user = DenialReason.DOMAIN, None
         elif is_client and not await _client_org_active(db, user.client_org_id):
             reason = DenialReason.NOT_REGISTERED

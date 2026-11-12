@@ -32,7 +32,8 @@ ar-portal/                Open this folder in VS Code; Git lives here
 | Phase D: claim lifecycle (mark complete, approve and close, return for correction, continue follow-up, close and reopen, priority) | Done |
 | M6: reports and exports (dashboard, 7 reports, CSV/Excel/PDF downloads with logging, report targets) | Done |
 | Client reporting (client organisations, Client Reporting Admin and User, approved client catalogue, client sign-in, delegation, patient detail switch) | Done |
-| Staging deploy (Vercel + Supabase with BAAs) | Next |
+| Demo deploy on Vercel and Supabase free plans, with fake data only (see DEPLOY.md) | Ready |
+| Production deploy (Vercel Pro with HIPAA add-on, Supabase with BAA) | Needs the paid plans |
 | M6 reports and exports | Next |
 | Staging and production deploy (Vercel, Supabase) | Needs a company Google account and Vercel Pro |
 

@@ -25,15 +25,20 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     # Company Google Workspace domain, e.g. hiredbillingsupport.com. Required outside local development.
+    # "*" accepts any verified Google account (still only registered, active people): for a demo or staging
+    # copy with fake data, never for production.
     allowed_google_domain: str = ""
 
     # "Today" for follow-up dates and aging is the team's local date, not the server's.
     business_timezone: str = "Asia/Karachi"
 
-    # Where uploaded files are kept. "local" writes to LOCAL_STORAGE_DIR on this computer (development only);
-    # deployed environments use Supabase Storage, configured in M0 step 7.
-    storage_backend: Literal["local"] = "local"
+    # Where uploaded files are kept. "local" writes to LOCAL_STORAGE_DIR on this computer (development only).
+    # Deployed copies use "supabase": a private Supabase Storage bucket, reached only by this API.
+    storage_backend: Literal["local", "supabase"] = "local"
     local_storage_dir: str = ".storage"
+    supabase_url: str = ""  # e.g. https://abcd1234.supabase.co
+    supabase_service_role_key: str = ""  # server only; never in the web app
+    storage_bucket: str = "ar-portal-files"
     max_upload_bytes: int = 4 * 1024 * 1024  # Vercel accepts request bodies up to 4.5 MB
 
     @field_validator("database_url")
@@ -80,7 +85,22 @@ class Settings(BaseSettings):
     def require_company_domain_outside_local(self) -> Self:
         if self.app_env != "local" and not self.allowed_google_domain:
             raise ValueError("ALLOWED_GOOGLE_DOMAIN must be set outside local development")
+        if self.app_env == "production" and self.allowed_google_domain == "*":
+            raise ValueError("Production must restrict sign-in to the company Google domain, not '*'")
         return self
+
+    @model_validator(mode="after")
+    def require_persistent_storage_outside_local(self) -> Self:
+        if self.app_env != "local" and self.storage_backend != "supabase":
+            raise ValueError("Deployed copies need STORAGE_BACKEND=supabase: Vercel has no permanent disk")
+        if self.storage_backend == "supabase" and not (self.supabase_url and self.supabase_service_role_key):
+            raise ValueError("STORAGE_BACKEND=supabase needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY")
+        return self
+
+    @property
+    def company_domain(self) -> str | None:
+        """The domain sign-in is limited to, or None when any verified Google account may try."""
+        return None if self.allowed_google_domain in ("", "*") else self.allowed_google_domain
 
     @property
     def is_production(self) -> bool:

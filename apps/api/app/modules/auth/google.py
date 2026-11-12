@@ -44,9 +44,9 @@ def authorization_url(state: str, code_verifier: str, *, company: bool = True) -
         "code_challenge_method": "S256",
         "prompt": "select_account",
     }
-    if settings.allowed_google_domain and company:
+    if settings.company_domain and company:
         # Only a hint to Google's account chooser; the domain is checked again in identity_from_claims.
-        params["hd"] = settings.allowed_google_domain
+        params["hd"] = settings.company_domain
     return f"{AUTHORIZE_URL}?{urlencode(params)}"
 
 
