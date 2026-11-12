@@ -189,7 +189,7 @@ function UsersAdmin() {
       {editing !== null && roles.data && (
         <UserDialog
           user={editing === "new" ? null : editing}
-          roles={roles.data.roles}
+          roles={roles.data.roles.filter((r) => !r.key.startsWith("client_"))}
           practices={practices.data ?? []}
           teams={teams.data ?? []}
           isMe={editing !== "new" && editing.id === me.id}
@@ -478,7 +478,9 @@ function UserDialog({
           <ExtraRolesEditor
             value={extraRoles}
             onChange={setExtraRoles}
-            roles={roles.filter((r) => r.key !== "system_admin")}
+            roles={roles.filter(
+              (r) => r.key !== "system_admin" && !r.key.startsWith("client_"),
+            )}
             practices={practices}
           />
         </FieldGroup>

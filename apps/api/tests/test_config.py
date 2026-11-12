@@ -116,3 +116,16 @@ def test_supabase_storage_calls_the_private_bucket(monkeypatch: pytest.MonkeyPat
     )
     with pytest.raises(ValueError):
         bucket.read("../secrets")
+
+
+def test_the_command_line_knows_every_table() -> None:
+    """create-admin runs outside the web app, so it must load every table itself."""
+    import subprocess
+    import sys
+
+    check = (
+        "import app.cli; from app.core.orm import Base; "
+        "assert 'ar.client_organisations' in Base.metadata.tables, sorted(Base.metadata.tables)"
+    )
+    result = subprocess.run([sys.executable, "-c", check], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr

@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import sys
 
+import app.models  # noqa: F401 - registers every table, so links between tables resolve
 from app.core import audit
 from app.core.db import get_sessionmaker
 from app.modules.auth import repository
