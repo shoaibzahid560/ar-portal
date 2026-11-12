@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import AsyncIterator
 from functools import lru_cache
 from typing import Annotated
@@ -20,9 +21,13 @@ def get_engine() -> AsyncEngine | None:
         # Vercel runs many short-lived function instances, so connections are not pooled here;
         # Supabase's pooler does the pooling.
         poolclass=NullPool,
+        # Supabase's transaction pooler (used on Vercel) shares connections between requests, so no
+        # prepared statement may be cached or reused by name.
         connect_args={
-            "statement_cache_size": 0,  # required by Supabase's transaction pooler
-            "timeout": 5,  # seconds to wait for a connection before giving up
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
+            "timeout": 10,  # seconds to wait for a connection before giving up
         },
     )
 
